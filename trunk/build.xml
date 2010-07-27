@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- ====================================================================== 
+     GWT Distributed Compiler                                            
+     ====================================================================== -->
+<project name="gwt-distcc" default="default" xmlns:ivy="antlib:org.apache.ivy.ant">
+	<!-- Some build configuration can be found in antbuild.properties -->
+	<property file="antbuild.properties" />
+	<description>
+    	GWT Distributed Compiler
+    </description>
+
+	<target name="default" depends="jars">
+		<echo>Build done</echo>
+	</target>
+
+	<target name="jars" depends="compile" description="Create runnable jars">
+		<manifestclasspath property="classpath.manifest.jars" jarfile="gwtdistcc-compile.jar">
+			<classpath>
+				<fileset dir="lib" includes="*.jar" />
+			</classpath>
+		</manifestclasspath>
+		<jar destfile="gwtdistcc-compile.jar" compress="false">
+        	<fileset dir="build/classes"/>
+			<manifest>
+				<attribute name="Main-Class" value="gwtdistcc.client.DistCompile" />
+				<attribute name="Class-Path" value="${classpath.manifest.jars}" />
+			</manifest>
+		</jar>
+		<jar destfile="gwtdistcc-slave.jar" compress="false">
+        	<fileset dir="build/classes"/>
+			<manifest>
+				<attribute name="Main-Class" value="gwtdistcc.client.BuildSlave" />
+				<attribute name="Class-Path" value="${classpath.manifest.jars}" />
+			</manifest>
+		</jar>
+	</target>
+
+
+	<target name="compile" unless="skip-compile">
+		<mkdir dir="build/classes" />
+		<javac srcdir="src-client" destdir="build/classes" debug="on" encoding="utf-8">
+			<classpath>
+				<fileset dir="lib">
+				    <include name="*.jar"/>
+				</fileset>
+				<fileset dir="${gwt.home}">
+				    <include name="*.jar"/>
+				</fileset>
+			</classpath>
+		</javac>
+	</target>
+
+	<property name="test.gwtdistcc.server" value="gwtdistcc.appspot.com"/>
+	<property name="test.gwtdistcc.queue" value="6clxSEBxk9mY"/>
+	<property name="test.gwtdistcc.key" value="FmuIEZRaioaI"/>
+	
+	<!-- Example ant target to build using the distributed compiler -->
+	<target name="run-test-compile" depends="jars">
+		<path id="classpath.gwt-compile">
+			<path location="src-gwt-example"/>
+			<path location="gwtdistcc-compile.jar"/>
+			<fileset dir="lib">
+			    <include name="*.jar"/>
+			</fileset>
+			<fileset dir="${gwt.home}">
+			    <include name="*.jar"/>
+			</fileset>
+		</path>
+		
+		<java classpathref="classpath.gwt-compile" fork="true" failonerror="true" maxmemory="100M" description="Compile GWT modules to javascript"
+				classname="gwtdistcc.client.DistCompile">
+			<arg line="-server ${test.gwtdistcc.server}"/>
+			<arg line="-queue ${test.gwtdistcc.queue}"/>
+			<arg line="-key ${test.gwtdistcc.key}"/>
+			<arg line="-gen build/gwt/generated" />
+			<arg line="-workDir build/gwt/work" />
+			<arg line="-extra build/gwt/extra" />
+			<arg line="-logLevel WARN" />
+			<arg line="-war war/" />
+			<arg line="-style ${gwt.output.style}" />
+			<arg line="test.TestAppToCompile" />
+		</java>
+	</target>
+
+	<target name="run-test-slave" depends="jars">
+		<!-- Create test queue -->
+		<mkdir dir="build/gwt/work/queues"/>
+		<propertyfile file="build/gwt/work/queues/test_queue.properties">
+			<entry key="server" default="${test.gwtdistcc.server}"/>
+			<entry key="queue" default="${test.gwtdistcc.queue}"/>
+			<entry key="key" default="${test.gwtdistcc.key}"/>
+		</propertyfile>
+		<java fork="true" failonerror="true" maxmemory="1200M" description="Build Slave" jar="gwtdistcc-slave.jar" >
+			<arg line="-workDir build/gwt/work"/>
+			<arg line="-localWorkers ${gwtdistcc.workers}"/>
+		</java>
+	</target>
+</project>

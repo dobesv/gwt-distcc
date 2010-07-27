@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<web-app xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+xmlns="http://java.sun.com/xml/ns/javaee"
+xmlns:web="http://java.sun.com/xml/ns/javaee/web-app_2_5.xsd"
+xsi:schemaLocation="http://java.sun.com/xml/ns/javaee
+http://java.sun.com/xml/ns/javaee/web-app_2_5.xsd" version="2.5">
+	<servlet>
+		<servlet-name>add-build</servlet-name>
+		<servlet-class>gwtdistcc.server.AddBuildServlet</servlet-class>
+	</servlet>
+	<servlet-mapping>
+		<servlet-name>add-build</servlet-name>
+		<url-pattern>/add-build</url-pattern>
+	</servlet-mapping>
+
+	<servlet>
+		<servlet-name>build-result</servlet-name>
+		<servlet-class>gwtdistcc.server.BuildResultServlet</servlet-class>
+	</servlet>
+	<servlet-mapping>
+		<servlet-name>build-result</servlet-name>
+		<url-pattern>/build-result</url-pattern>
+	</servlet-mapping>
+	
+	<servlet>
+		<servlet-name>build-status</servlet-name>
+		<servlet-class>gwtdistcc.server.BuildStatusServlet</servlet-class>
+	</servlet>
+	<servlet-mapping>
+		<servlet-name>build-status</servlet-name>
+		<url-pattern>/build-status</url-pattern>
+	</servlet-mapping>
+	
+	<servlet>
+		<servlet-name>check-for-work</servlet-name>
+		<servlet-class>gwtdistcc.server.CheckForWorkServlet</servlet-class>
+	</servlet>
+	<servlet-mapping>
+		<servlet-name>check-for-work</servlet-name>
+		<url-pattern>/check-for-work</url-pattern>
+	</servlet-mapping>
+	
+	<servlet>
+		<servlet-name>list-builds</servlet-name>
+		<servlet-class>gwtdistcc.server.ListBuildsServlet</servlet-class>
+	</servlet>
+	<servlet-mapping>
+		<servlet-name>list-builds</servlet-name>
+		<url-pattern>/list-builds</url-pattern>
+	</servlet-mapping>
+	
+	<welcome-file-list>
+		<welcome-file>index.html</welcome-file>
+	</welcome-file-list>
+</web-app>

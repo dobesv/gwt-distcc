@@ -1,0 +1,16 @@
+<html>
+<head>
+<title>Build Upload Test Form</title>
+</head>
+<body>
+<h2>This form allows "manual" submission of a build.  Not useful normally, hust here for testing.</h2>
+<form method="post" enctype="multipart/form-data" action="%URL%">
+	Build ID: <input type="text" name="id"><br/>
+	Build Label: <input type="text" name="label"><br/>
+	Queue IDs: <input type="text" name="q"><br/>
+	Permutations: <input type="text" name="perms"><br/>
+	AST Data: <input type="file" name="data"><br/>
+	<input type="submit" value="Submit">
+</form>
+</body>
+</html>
