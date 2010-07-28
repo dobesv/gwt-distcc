@@ -260,7 +260,7 @@ public class BuildSlave {
 									continue; // Build already started
 								}
 							} else if(get.getStatusCode() == HttpStatus.SC_NOT_FOUND){
-								logger.info("No builds on "+url);
+								logger.debug("No builds on "+url);
 							} else {
 								logger.warn("Error reading "+url);
 							}
