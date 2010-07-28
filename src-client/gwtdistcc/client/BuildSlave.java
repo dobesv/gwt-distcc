@@ -351,11 +351,15 @@ public class BuildSlave {
 		
 	}
 	static final HashSet<BuildInProgress> buildsInProgress = new HashSet<BuildInProgress>();
-	static synchronized boolean beginNewBuild(String server, String buildId, int perm) {
-		return buildsInProgress.add(new BuildInProgress(server, buildId, perm));
+	static boolean beginNewBuild(String server, String buildId, int perm) {
+		synchronized (buildsInProgress) {
+			return buildsInProgress.add(new BuildInProgress(server, buildId, perm));
+		}
 	}
-	static synchronized void exitBuild(String server, String buildId, int perm) {
-		buildsInProgress.remove(new BuildInProgress(server, buildId, perm));
+	static void exitBuild(String server, String buildId, int perm) {
+		synchronized (buildsInProgress) {
+			buildsInProgress.remove(new BuildInProgress(server, buildId, perm));
+		}
 	}
 	public static void doBuild(String server, String buildId, int perm, String uploadURL, String cryptKey) {
 		try {
