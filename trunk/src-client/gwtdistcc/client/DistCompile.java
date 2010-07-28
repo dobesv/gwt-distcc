@@ -168,7 +168,7 @@ public class DistCompile {
 			long timeout = System.currentTimeMillis() + 1200000;
 			while(!waitingForBuilds.isEmpty() && System.currentTimeMillis() < timeout) {
 				Thread.sleep(5000);
-				for(Map.Entry<String,TreeSet<String>> buildEntry : waitingForBuilds.entrySet()) {
+				for(Map.Entry<String,TreeSet<String>> buildEntry : new ArrayList<Map.Entry<String,TreeSet<String>>>(waitingForBuilds.entrySet())) {
 					String buildId = buildEntry.getKey();
 					TreeSet<String> waitingForPermutations = buildEntry.getValue();
 					String buildStatusURL = server+"/build-status?id="+buildId;
