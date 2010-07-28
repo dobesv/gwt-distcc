@@ -5,6 +5,7 @@ import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.net.URLEncoder;
 import java.util.Map;
+import java.util.TreeMap;
 
 import org.apache.commons.httpclient.Header;
 import org.apache.commons.httpclient.HttpClient;
@@ -152,6 +153,23 @@ public class ApiClient {
 		}
 	}
 	
+
+	public void buildAlive(String server, String buildId, int perm, String workerId) throws HttpException, IOException {
+		TreeMap<String,String> params = new TreeMap<String,String>();
+		params.put("id", buildId);
+		params.put("workerId", workerId);
+		params.put("perm", String.valueOf(perm));
+		StringBuffer url=new StringBuffer(server).append("/build-result?");
+		appendQueryString(url, params);
+		PostMethod post = new PostMethod(url.toString());
+		executeMethod(post);
+		post.releaseConnection();
+		if(post.getStatusCode() != HttpStatus.SC_OK) {
+			logger.error("Got bad ping response: "+post.getStatusLine());
+		}
+		logger.info("Notified build server we are still building at "+post.getURI());
+	}
+	
 	public void executeMethod(HttpMethod method) throws HttpException, IOException {
 		client.executeMethod(method);
 	}
@@ -163,4 +181,5 @@ public class ApiClient {
 			server = server.substring(0, server.length()-1);
 		return server;
 	}
+
 }
