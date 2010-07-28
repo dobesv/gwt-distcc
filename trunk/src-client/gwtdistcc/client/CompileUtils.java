@@ -217,8 +217,22 @@ public class CompileUtils {
 		return out;
 	}
 
-	public static String digestFile(File f) throws IOException, NoSuchAlgorithmException {
-		MessageDigest digest = MessageDigest.getInstance("SHA1");
+	/**
+	 * SHA1 the given file
+	 * 
+	 * @param prelude If provided, this is digested before the file contents
+	 * @param f File to digest
+	 * @return SHA1 hash of the prelude (if present) and the file's contents
+	 */
+	public static String digestFile(byte[] prelude, File f) throws IOException {
+		MessageDigest digest;
+		try {
+			digest = MessageDigest.getInstance("SHA1");
+		} catch (NoSuchAlgorithmException e) {
+			throw new Error(e);
+		}
+		if(prelude != null)
+			digest.update(prelude);
 		byte[] buffer = new byte[8192];
 		FileInputStream input = new FileInputStream(f);
 	    int n = 0;

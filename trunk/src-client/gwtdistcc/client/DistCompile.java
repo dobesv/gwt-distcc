@@ -128,20 +128,14 @@ public class DistCompile {
 				File permsCountFile = new File(moduleCompileDir, "permCount.txt");
 				int permCount = Integer.parseInt(IOUtils.toString(new FileReader(permsCountFile)).trim());
 				File astFile = new File(moduleCompileDir, Precompile.PRECOMPILE_FILENAME);
-				File payloadTempFile = File.createTempFile("payload", "tmp", workDir);
-				CompileUtils.encryptPayload(moduleName, cryptKey, astFile, payloadTempFile);
+				String buildId = CompileUtils.digestFile(cryptKey.getBytes(), astFile);
 				
-				// Move payload to build folder so a local slave can re-use it if its using the same workDir we are
-				String buildId = CompileUtils.digestFile(payloadTempFile);
 				File buildDir = new File(workDir, buildId);
 				if(!buildDir.mkdirs()) {
 					System.err.println("Failed to create folder "+buildDir);
 				}
 				File payloadFile = new File(buildDir, "payload");
-				if(!payloadTempFile.renameTo(payloadFile)) {
-					System.err.println("Failed to rename payload temp file "+payloadTempFile+" to payload file "+payloadFile);
-					payloadFile = payloadTempFile;
-				}
+				CompileUtils.encryptPayload(moduleName, cryptKey, astFile, payloadFile);
 				File buildModuleDir = new File(buildDir, moduleName);
 				FileUtils.copyDirectoryToDirectory(moduleDir, buildModuleDir);
 				
