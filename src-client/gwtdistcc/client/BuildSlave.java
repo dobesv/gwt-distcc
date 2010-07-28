@@ -232,7 +232,6 @@ public class BuildSlave {
 								// Got a build back ...
 								final String buildId = get.getResponseHeader("X-Build-ID").getValue();
 								final int perm = Integer.parseInt(get.getResponseHeader("X-Permutation").getValue());
-								logger.info("Got a build back with ID "+buildId+" and permutation "+perm+" from "+url);
 								final String uploadURL = get.getResponseHeader("X-Upload-Result-To").getValue();
 								if(beginNewBuild(qtw.server, buildId, perm)) {
 									try {
@@ -375,6 +374,9 @@ public class BuildSlave {
 			InputStream in = CompileUtils.maybeDecryptStream(cryptKey, fis);
 			
 			String moduleName = CompileUtils.readSmallString(in);
+			
+			logger.info("Compiling "+moduleName+" in build ID "+buildId+" and permutation "+perm);
+			
 			File compileDir = getCompileDir(buildDir, moduleName);
 			compileDir.mkdirs();
 			File astFile = new File(compileDir, Precompile.PRECOMPILE_FILENAME);
