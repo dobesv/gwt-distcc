@@ -18,6 +18,8 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
+import java.util.zip.GZIPInputStream;
+import java.util.zip.GZIPOutputStream;
 
 import javax.crypto.Cipher;
 import javax.crypto.CipherInputStream;
@@ -246,9 +248,7 @@ public class CompileUtils {
 			File cipherTextFile) throws FileNotFoundException, Error,
 			IOException {
 		InputStream in;
-		FileOutputStream fos;
-		fos = new FileOutputStream(cipherTextFile);
-		OutputStream out = maybeEncryptStream(cryptKey, fos);
+		OutputStream out = new GZIPOutputStream(maybeEncryptStream(cryptKey, new FileOutputStream(cipherTextFile)));
 		in = new FileInputStream(plainTextFile);
 		try {
 			IOUtils.copy(in, out);
@@ -272,7 +272,7 @@ public class CompileUtils {
 
 	public static void decryptStreamToFile(String cryptKey, InputStream stream,
 			File file) throws IOException, Error, FileNotFoundException {
-		InputStream is = maybeDecryptStream(cryptKey, stream);
+		InputStream is = new GZIPInputStream(maybeDecryptStream(cryptKey, stream));
 		try {
 			writeStreamToFile(is, file);
 		} finally {
