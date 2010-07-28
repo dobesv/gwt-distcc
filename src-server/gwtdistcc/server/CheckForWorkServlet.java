@@ -112,12 +112,5 @@ public class CheckForWorkServlet extends HttpServlet {
 		
 		return ServletUtil.getStrings(req, "cache");
 	}
-	
-	private void showHelp(HttpServletRequest req, HttpServletResponse resp) throws IOException {
-		resp.setContentType("text/plain");
-		PrintWriter w = resp.getWriter();
-		w.println("Usage: GET "+req.getRequestURI()+"?q=<queue ids>&cache=<cached build ids>&w=<worker id>&label=<user-friendly worker label>");
-		w.close();
-	}
-	
+
 }

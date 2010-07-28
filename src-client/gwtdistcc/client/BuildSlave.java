@@ -286,6 +286,13 @@ public class BuildSlave {
 				do {
 					synchronized(buildsInProgress) {
 						wait = (executor.getActiveCount() >= localWorkers || buildsInProgress.size()>=localWorkers);
+						for(BuildInProgress bip : buildsInProgress) {
+							try {
+								client.buildAlive(bip.server, bip.buildId, bip.perm, workerId);
+							} catch (Exception e) {
+								logger.error("Error sending build ping to server", e);
+							}
+						}
 					}
 					if(wait || !newBuild)
 						Thread.sleep(5000);
@@ -296,12 +303,59 @@ public class BuildSlave {
 			}
 		}
 	}
-	static final HashSet<String> buildsInProgress = new HashSet<String>();
+	
+	static class BuildInProgress {
+		String server;
+		String buildId;
+		int perm;
+		public BuildInProgress(String server, String buildId, int perm) {
+			super();
+			this.server = server;
+			this.buildId = buildId;
+			this.perm = perm;
+		}
+		@Override
+		public int hashCode() {
+			final int prime = 31;
+			int result = 1;
+			result = prime * result
+					+ ((buildId == null) ? 0 : buildId.hashCode());
+			result = prime * result + perm;
+			result = prime * result
+					+ ((server == null) ? 0 : server.hashCode());
+			return result;
+		}
+		@Override
+		public boolean equals(Object obj) {
+			if (this == obj)
+				return true;
+			if (obj == null)
+				return false;
+			if (getClass() != obj.getClass())
+				return false;
+			BuildInProgress other = (BuildInProgress) obj;
+			if (buildId == null) {
+				if (other.buildId != null)
+					return false;
+			} else if (!buildId.equals(other.buildId))
+				return false;
+			if (perm != other.perm)
+				return false;
+			if (server == null) {
+				if (other.server != null)
+					return false;
+			} else if (!server.equals(other.server))
+				return false;
+			return true;
+		}
+		
+	}
+	static final HashSet<BuildInProgress> buildsInProgress = new HashSet<BuildInProgress>();
 	static synchronized boolean beginNewBuild(String server, String buildId, int perm) {
-		return buildsInProgress.add(server+"-"+buildId+"-"+perm);
+		return buildsInProgress.add(new BuildInProgress(server, buildId, perm));
 	}
 	static synchronized void exitBuild(String server, String buildId, int perm) {
-		buildsInProgress.remove(server+"-"+buildId+"-"+perm);
+		buildsInProgress.remove(new BuildInProgress(server, buildId, perm));
 	}
 	public static void doBuild(String server, String buildId, int perm, String uploadURL, String cryptKey) {
 		try {
