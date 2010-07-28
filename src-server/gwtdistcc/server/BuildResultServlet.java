@@ -1,6 +1,7 @@
 package gwtdistcc.server;
 
 import java.io.IOException;
+import java.util.Collections;
 import java.util.Date;
 import java.util.Map;
 
@@ -57,16 +58,22 @@ public class BuildResultServlet extends HttpServlet {
 						resp.sendError(HttpServletResponse.SC_NOT_FOUND, "You are not the current worker for that permutation.");
 						return;
 					}
-					if(p.getFinished() != null) {
-						resp.sendError(HttpServletResponse.SC_BAD_REQUEST, "This permutation is already marked as complete.");
-						return;
-					}
 					p.setBuildAlive(new Date());
 					
-					Map<String, BlobKey> blobs = blobstoreService.getUploadedBlobs(req);
+					Map<String, BlobKey> blobs;
+					try {
+						blobs = blobstoreService.getUploadedBlobs(req);
+					} catch (IllegalStateException e) {
+						// Probably didn't get any blobs ..
+						blobs = Collections.emptyMap();
+					}
 					if(blobs.isEmpty()) {
 						// No uploaded data, this is just a ping
 					} else {
+						if(p.getFinished() != null || p.getResultData() != null) {
+							resp.sendError(HttpServletResponse.SC_BAD_REQUEST, "This permutation is already marked as complete.");
+							return;
+						}
 						BlobKey blob = blobs.values().iterator().next();
 						p.setFinished(new Date());
 						p.setResultData(blob);
