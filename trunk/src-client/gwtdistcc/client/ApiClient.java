@@ -167,7 +167,7 @@ public class ApiClient {
 		if(post.getStatusCode() != HttpStatus.SC_OK) {
 			logger.error("Got bad ping response: "+post.getStatusLine());
 		}
-		logger.info("Notified build server we are still building at "+post.getURI());
+		logger.debug("Notified build server we are still building at "+post.getURI());
 	}
 	
 	public void executeMethod(HttpMethod method) throws HttpException, IOException {
