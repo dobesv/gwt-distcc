@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<cronentries>
+  <cron>
+    <url>/delete-old-builds</url>
+    <description>Clean up old builds from the database and blob store.</description>
+    <schedule>every 15 minutes</schedule>
+  </cron>
+</cronentries>
