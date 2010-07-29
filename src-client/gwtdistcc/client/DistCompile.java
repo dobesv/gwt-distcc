@@ -126,8 +126,15 @@ public class DistCompile {
 				System.err.println("You must specify one or more queues to submit to by passing the -queue command line argument.");
 				System.exit(1);
 			}
+			long overallStartTime=System.currentTimeMillis();
+			
 			logger.info("Compiling "+StringUtils.join(modules, " and ")+"; workDir is "+workDir+" server is "+server);
+			long precompileStartTime = System.currentTimeMillis();
 			CompileUtils.launchToolAndWaitAndExitOnFailure(Precompile.class, compileArgs.toArray(new String[compileArgs.size()]));
+			long precompileFinishTime = System.currentTimeMillis();
+			
+			
+			long uploadStartTime = System.currentTimeMillis();
 			TreeMap<String,TreeSet<String>> waitingForBuilds = new TreeMap<String, TreeSet<String>>();
 			TreeMap<String,String> moduleNameForBuild = new TreeMap<String, String>();
 			ApiClient apiClient = new ApiClient();
@@ -137,11 +144,13 @@ public class DistCompile {
 						apiClient);
 				moduleNameForBuild.put(buildId, moduleName);
 			}
+			long uploadEndTime = System.currentTimeMillis();
 			
+			long linkingTime=0;
 			TreeSet<String> knownStatus = new TreeSet<String>();
 			// Now wait for the build to finish
-			long startTime = System.currentTimeMillis();
-			long timeout = startTime + 1200000;
+			long buildStartTime = System.currentTimeMillis();
+			long timeout = buildStartTime + 1200000;
 			while(!waitingForBuilds.isEmpty() && System.currentTimeMillis() < timeout) {
 				Thread.sleep(5000);
 				for(Map.Entry<String,TreeSet<String>> buildEntry : new ArrayList<Map.Entry<String,TreeSet<String>>>(waitingForBuilds.entrySet())) {
@@ -178,10 +187,16 @@ public class DistCompile {
 								waitingForBuilds.remove(buildId);
 								logger.info("Got all permutations back for "+moduleName+"; linking....");
 								
+								long linkStartTime = System.currentTimeMillis();
 								linkModule(linkerArgs, moduleName);
+								linkingTime += System.currentTimeMillis() - linkStartTime;
 								
 								if(waitingForBuilds.isEmpty()) {
-									logger.info("Build complete; total time is "+BigDecimal.valueOf(System.currentTimeMillis()-startTime).movePointLeft(3).toPlainString()+"s");
+									logger.info("Build complete."
+											+ "\ntotal time: "+elapsed(overallStartTime, System.currentTimeMillis())
+											+ "\nprecompile: "+elapsed(precompileStartTime, precompileFinishTime)
+											+ "\nuploading:  "+elapsed(uploadStartTime, buildStartTime)
+											+ "\nbuilding:   "+elapsed(buildStartTime, System.currentTimeMillis()));
 								}
 							}
 						}
@@ -197,6 +212,11 @@ public class DistCompile {
 			e.printStackTrace();
 			System.exit(1);
 		}
+	}
+
+	private static String elapsed(long startTime, long endTime) {
+		String elapsed = BigDecimal.valueOf(endTime-startTime).movePointLeft(3).toPlainString()+"s";
+		return elapsed;
 	}
 
 	private static File getPermutationResultFile(File workDir,
