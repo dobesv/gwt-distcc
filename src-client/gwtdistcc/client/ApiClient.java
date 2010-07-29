@@ -178,6 +178,13 @@ public class ApiClient {
 		client.executeMethod(method);
 	}
 
+	public HeadMethod getBuildStatus(String server, String buildId) throws HttpException, IOException {
+		String buildStatusURL = server+"/build-status?id="+buildId;
+		HeadMethod req = new HeadMethod(buildStatusURL);
+		executeMethod(req);
+		return req;
+	}
+
 	static String normalizeServerURL(String server) {
 		if(!(server.startsWith("http://") || server.startsWith("https://")))
 			server = "https://"+server;
