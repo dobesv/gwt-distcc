@@ -316,6 +316,11 @@ public class CompileUtils {
 		} finally {
 			IOUtils.closeQuietly(fo); // May already be closed by the CipherOutputStream
 		}
+		if(payloadFile.exists()) {
+			File tempDeleteFile = new File(payloadFile.getParentFile(), payloadFile.getName()+".deleteme");
+			payloadFile.renameTo(tempDeleteFile);
+			tempDeleteFile.delete();
+		}
 		if(!tempFile.renameTo(payloadFile)) {
 			throw new IOException("Failed to rename temp file "+tempFile+" to payload file "+payloadFile);
 		}

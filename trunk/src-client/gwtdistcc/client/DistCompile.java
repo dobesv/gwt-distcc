@@ -4,6 +4,7 @@ import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
+import java.math.BigDecimal;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
@@ -139,7 +140,8 @@ public class DistCompile {
 			
 			TreeSet<String> knownStatus = new TreeSet<String>();
 			// Now wait for the build to finish
-			long timeout = System.currentTimeMillis() + 1200000;
+			long startTime = System.currentTimeMillis();
+			long timeout = startTime + 1200000;
 			while(!waitingForBuilds.isEmpty() && System.currentTimeMillis() < timeout) {
 				Thread.sleep(5000);
 				for(Map.Entry<String,TreeSet<String>> buildEntry : new ArrayList<Map.Entry<String,TreeSet<String>>>(waitingForBuilds.entrySet())) {
@@ -166,30 +168,21 @@ public class DistCompile {
 					String[] completedPermsStrArray = completedPermsString.split(",");
 					for(String perm : completedPermsStrArray) {
 						if(waitingForPermutations.remove(perm)) {
-							File moduleDir = new File(workDir, moduleName);
-							File moduleCompileDir = new File(moduleDir, "compiler");
-							moduleCompileDir.mkdirs();
-							File permFile = new File(moduleCompileDir, "permutation-"+perm+".js");
+							File permFile = getPermutationResultFile(workDir, moduleName, perm);
 							if(permFile.exists()) {
 								logger.info("Compile result for permutation "+perm+" for module "+moduleName+" found on disk, not (re-)downloading.");
 							} else {
-								logger.info("Downloading permutation "+perm);
-								GetMethod dlreq = new GetMethod(server+"/build-result?id="+buildId+"&perm="+perm);
-								apiClient.executeMethod(dlreq);
-								if(dlreq.getStatusCode() != HttpStatus.SC_OK) {
-									logger.error("Error trying to download permutation "+perm+": "+dlreq.getStatusLine());
-									System.exit(1);
-									return;
-								}
-								CompileUtils.decryptStreamToFile(cryptKey, dlreq.getResponseBodyAsStream(), permFile);
+								downloadBuildResult(server, cryptKey, buildId, perm, permFile, apiClient);
 							}
 							if(waitingForPermutations.isEmpty()) {
 								waitingForBuilds.remove(buildId);
 								logger.info("Got all permutations back for "+moduleName+"; linking....");
 								
-								String[] moduleLinkArgs = linkerArgs.toArray(new String[linkerArgs.size()+1]);
-								moduleLinkArgs[moduleLinkArgs.length-1] = moduleName;
-								CompileUtils.launchToolAndWaitAndExitOnFailure(Link.class, moduleLinkArgs);
+								linkModule(linkerArgs, moduleName);
+								
+								if(waitingForBuilds.isEmpty()) {
+									logger.info("Build complete; total time is "+BigDecimal.valueOf(System.currentTimeMillis()-startTime).movePointLeft(3).toPlainString()+"s");
+								}
 							}
 						}
 					}
@@ -206,6 +199,36 @@ public class DistCompile {
 		}
 	}
 
+	private static File getPermutationResultFile(File workDir,
+			String moduleName, String perm) {
+		File moduleDir = new File(workDir, moduleName);
+		File moduleCompileDir = new File(moduleDir, "compiler");
+		moduleCompileDir.mkdirs();
+		File permFile = new File(moduleCompileDir, "permutation-"+perm+".js");
+		return permFile;
+	}
+
+	private static void linkModule(ArrayList<String> linkerArgs,
+			String moduleName) throws IOException, InterruptedException {
+		String[] moduleLinkArgs = linkerArgs.toArray(new String[linkerArgs.size()+1]);
+		moduleLinkArgs[moduleLinkArgs.length-1] = moduleName;
+		CompileUtils.launchToolAndWaitAndExitOnFailure(Link.class, moduleLinkArgs);
+	}
+
+	private static void downloadBuildResult(String server, String cryptKey,
+			String buildId, String perm, File permFile, ApiClient apiClient)
+			throws HttpException, IOException, Error, FileNotFoundException {
+		logger.info("Downloading permutation "+perm);
+		GetMethod dlreq = new GetMethod(server+"/build-result?id="+buildId+"&perm="+perm);
+		apiClient.executeMethod(dlreq);
+		if(dlreq.getStatusCode() != HttpStatus.SC_OK) {
+			logger.error("Error trying to download permutation "+perm+": "+dlreq.getStatusLine());
+			System.exit(1);
+			return;
+		}
+		CompileUtils.decryptStreamToFile(cryptKey, dlreq.getResponseBodyAsStream(), permFile);
+	}
+
 	private static void logPermutationStatusIfChanged(HeadMethod req,
 			TreeSet<String> knownStatus, String moduleName,
 			TreeSet<String> waitingForPermutations) {
@@ -220,10 +243,10 @@ public class DistCompile {
 				Header startTimeHeader = req.getResponseHeader("X-Permutation-"+perm+"-Started");
 				if(startTimeHeader != null) {
 					sb.append(" started at ").append(startTimeHeader.getValue());
-					Header activeHeader = req.getResponseHeader("X-Permutation-"+perm+"-Active");
-					if(activeHeader != null && !activeHeader.getValue().equals(startTimeHeader.getValue())) {
-						sb.append(" worker active at ").append(activeHeader.getValue());
-					}
+//					Header activeHeader = req.getResponseHeader("X-Permutation-"+perm+"-Active");
+//					if(activeHeader != null && !activeHeader.getValue().equals(startTimeHeader.getValue())) {
+//						sb.append(" worker active at ").append(activeHeader.getValue());
+//					}
 					Header workerHeader = req.getResponseHeader("X-Permutation-"+perm+"-Worker");
 					if(workerHeader != null) {
 						sb.append(" by ").append(workerHeader.getValue());
@@ -252,8 +275,8 @@ public class DistCompile {
 		String buildId = CompileUtils.digestFile(cryptKey.getBytes(), astFile);
 		
 		File buildDir = new File(workDir, buildId);
-		if(!buildDir.mkdirs()) {
-			System.err.println("Failed to create folder "+buildDir);
+		if(!buildDir.mkdirs() && !buildDir.exists()) {
+			throw new Error("Failed to create folder "+buildDir);
 		}
 		File payloadFile = new File(buildDir, "payload");
 		CompileUtils.encryptPayload(moduleName, cryptKey, astFile, payloadFile);

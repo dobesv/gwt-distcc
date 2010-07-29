@@ -3,6 +3,7 @@ package gwtdistcc.server;
 import java.util.Collection;
 import java.util.Date;
 import java.util.TreeSet;
+import java.util.logging.Logger;
 
 import javax.jdo.PersistenceManager;
 import javax.jdo.Query;
@@ -15,7 +16,8 @@ import com.google.appengine.api.blobstore.BlobstoreService;
 
 @PersistenceCapable
 public class Build {
-	private static final int BUILD_EXPIRY_TIME = 60000;
+	private static final int BUILD_EXPIRY_TIME = 600000;
+	private static final Logger log = Logger.getLogger(Build.class.getName());
 
 	@PrimaryKey
 	@Persistent
@@ -192,8 +194,10 @@ public class Build {
 	}
 
 	public boolean deleteIfStale(PersistenceManager pm, BlobstoreService blobstoreService) {
-		boolean buildExpired = (System.currentTimeMillis() - getFreshness().getTime()) > BUILD_EXPIRY_TIME;
+		Date freshness = getFreshness();
+		boolean buildExpired = (System.currentTimeMillis() - freshness.getTime()) > BUILD_EXPIRY_TIME;
 		if(buildExpired) {
+			log.info("Deleting stale build "+id+"; not touched since "+freshness);
 			// Time limit on a build, it must be touched or viewed at least once a minute or we'll can it
 			delete(pm, blobstoreService);
 		}

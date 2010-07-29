@@ -52,7 +52,6 @@ public class CheckForWorkServlet extends HttpServlet {
 								p.setWorkerLabel(workerLabel);
 								p.setBuildAlive(new Date());
 								p.setStarted(new Date());
-								p.setDownloaded(new Date());
 								resp.setHeader("X-Queue-ID", queueId);
 								resp.setHeader("X-Build-ID", b.getId());
 								resp.setHeader("ETag", b.getId());
