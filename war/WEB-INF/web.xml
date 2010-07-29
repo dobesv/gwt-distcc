@@ -39,6 +39,15 @@ http://java.sun.com/xml/ns/javaee/web-app_2_5.xsd" version="2.5">
 		<servlet-name>check-for-work</servlet-name>
 		<url-pattern>/check-for-work</url-pattern>
 	</servlet-mapping>
+
+	<servlet>
+		<servlet-name>delete-old-builds</servlet-name>
+		<servlet-class>gwtdistcc.server.DeleteOldBuildsServlet</servlet-class>
+	</servlet>
+	<servlet-mapping>
+		<servlet-name>delete-old-builds</servlet-name>
+		<url-pattern>/delete-old-builds</url-pattern>
+	</servlet-mapping>
 	
 	<servlet>
 		<servlet-name>list-builds</servlet-name>
