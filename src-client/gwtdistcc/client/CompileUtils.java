@@ -95,7 +95,7 @@ public class CompileUtils {
 		
 		ProcessBuilder builder = new ProcessBuilder();
 		builder.command(args);
-
+		
 		logger.info(StringUtils.join(args, " "));
 		
 		final Process proc = builder.start();
@@ -112,7 +112,7 @@ public class CompileUtils {
 						if (line == null) {
 							break;
 						}
-						procLogger.info(line);
+						System.out.println(line);
 					} catch (EOFException e) {
 						// Ignore
 					} catch (IOException e) {
@@ -130,7 +130,7 @@ public class CompileUtils {
 						if (line == null) {
 							break;
 						}
-						procLogger.error(line);
+						System.err.println(line);
 					} catch (EOFException e) {
 						// Ignore
 					} catch (IOException e) {
