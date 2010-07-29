@@ -9,6 +9,7 @@ import java.util.Map;
 import java.util.TreeMap;
 import java.util.TreeSet;
 
+import org.apache.commons.httpclient.Header;
 import org.apache.commons.httpclient.HttpStatus;
 import org.apache.commons.httpclient.methods.GetMethod;
 import org.apache.commons.httpclient.methods.HeadMethod;
@@ -107,7 +108,6 @@ public class DistCompile {
 					String moduleName = args[i];
 					modules.add(moduleName);
 					compileArgs.add(moduleName);
-					linkerArgs.add(moduleName);
 				}
 			}
 			if(modules.isEmpty()) {
@@ -165,17 +165,48 @@ public class DistCompile {
 				waitingForBuilds.put(buildId, waitingForPermutations);
 				moduleNameForBuild.put(buildId, moduleName);
 			}
+			
+			TreeSet<String> knownStatus = new TreeSet<String>();
 			// Now wait for the build to finish
 			long timeout = System.currentTimeMillis() + 1200000;
 			while(!waitingForBuilds.isEmpty() && System.currentTimeMillis() < timeout) {
 				Thread.sleep(5000);
 				for(Map.Entry<String,TreeSet<String>> buildEntry : new ArrayList<Map.Entry<String,TreeSet<String>>>(waitingForBuilds.entrySet())) {
 					String buildId = buildEntry.getKey();
+					String moduleName = moduleNameForBuild.get(buildId);
 					TreeSet<String> waitingForPermutations = buildEntry.getValue();
 					String buildStatusURL = server+"/build-status?id="+buildId;
 					HeadMethod req = new HeadMethod(buildStatusURL);
 					apiClient.executeMethod(req);
-					logger.info("Waiting for build results to come back... "+buildStatusURL+" -> "+req.getStatusLine());
+					
+					logger.debug("Waiting for build results to come back for "+moduleName+"... Perms "+StringUtils.join(waitingForPermutations, ",")+" still pending");
+					
+					for(String perm : waitingForPermutations) {
+						StringBuffer sb = new StringBuffer();
+						sb.append("Permutation ").append(perm);
+						sb.append(" of ").append(moduleName);
+						Header finishTimeHeader = req.getResponseHeader("X-Permutation-"+perm+"-Finished");
+						if(finishTimeHeader != null) {
+							sb.append(" completed at ").append(finishTimeHeader.getValue());
+						} else {
+							Header startTimeHeader = req.getResponseHeader("X-Permutation-"+perm+"-Started");
+							if(startTimeHeader != null) {
+								sb.append(" started at ").append(startTimeHeader.getValue());
+								Header activeHeader = req.getResponseHeader("X-Permutation-"+perm+"-Active");
+								if(activeHeader != null && !activeHeader.getValue().equals(startTimeHeader.getValue())) {
+									sb.append(" worker active at ").append(activeHeader.getValue());
+								}
+							}
+						}
+						Header workerHeader = req.getResponseHeader("X-Permutation-"+perm+"-Worker");
+						if(workerHeader != null) {
+							sb.append(" by ").append(workerHeader.getValue());
+						}
+						if(knownStatus.add(sb.toString())) {
+							logger.info(sb.toString());
+						}
+					}
+					
 					if(req.getStatusCode() != HttpStatus.SC_OK) {
 						logger.error("Error checking build status: "+req.getStatusLine());
 						System.exit(1);
@@ -185,7 +216,6 @@ public class DistCompile {
 					String[] completedPermsStrArray = completedPermsString.split(",");
 					for(String perm : completedPermsStrArray) {
 						if(waitingForPermutations.remove(perm)) {
-							String moduleName = moduleNameForBuild.get(buildId);
 							File moduleDir = new File(workDir, moduleName);
 							File moduleCompileDir = new File(moduleDir, "compiler");
 							moduleCompileDir.mkdirs();
@@ -205,6 +235,11 @@ public class DistCompile {
 							}
 							if(waitingForPermutations.isEmpty()) {
 								waitingForBuilds.remove(buildId);
+								logger.info("Got all permutations back for "+moduleName+"; linking....");
+								
+								String[] moduleLinkArgs = linkerArgs.toArray(new String[linkerArgs.size()+1]);
+								moduleLinkArgs[moduleLinkArgs.length-1] = moduleName;
+								CompileUtils.launchToolAndWaitAndExitOnFailure(Link.class, moduleLinkArgs);
 							}
 						}
 					}
@@ -215,13 +250,6 @@ public class DistCompile {
 					}
 				}
 			}
-			
-			if(waitingForBuilds.isEmpty()) {
-				// Got them all
-				logger.info("All permutations done compiling, running link...");
-				CompileUtils.launchToolAndWaitAndExitOnFailure(Link.class, linkerArgs.toArray(new String[linkerArgs.size()]));
-			}
-			
 		} catch (Exception e) {
 			e.printStackTrace();
 			System.exit(1);

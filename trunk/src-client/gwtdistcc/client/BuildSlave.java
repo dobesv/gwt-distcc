@@ -190,7 +190,8 @@ public class BuildSlave {
 		client = new ApiClient();
 		logger = LoggerFactory.getLogger(BuildSlave.class);
 		
-
+		String workerStatus="";
+		
 		ThreadPoolExecutor executor = new ThreadPoolExecutor(localWorkers, localWorkers,
 		  0L, TimeUnit.MILLISECONDS,
 		  new LinkedBlockingQueue<Runnable>());
@@ -299,16 +300,16 @@ public class BuildSlave {
 				do {
 					synchronized(buildsInProgress) {
 						wait = (executor.getActiveCount() >= localWorkers || buildsInProgress.size()>=localWorkers);
-						if(!buildsInProgress.isEmpty()) {
-							for(BuildInProgress bip : buildsInProgress) {
-								try {
-									client.buildAlive(bip.server, bip.buildId, bip.perm, workerId);
-								} catch (Exception e) {
-									logger.error("Error sending build ping to server", e);
-								}
+						for(BuildInProgress bip : buildsInProgress) {
+							try {
+								client.buildAlive(bip.server, bip.buildId, bip.perm, workerId);
+							} catch (Exception e) {
+								logger.error("Error sending build ping to server", e);
 							}
-							logger.info(executor.getActiveCount()+" of "+localWorkers+" workers active for "+buildsInProgress.size()+" builds in progress");
 						}
+						String newWorkerStatus = executor.getActiveCount()+" of "+localWorkers+" workers active for "+buildsInProgress.size()+" builds in progress";
+						if(!newWorkerStatus.equals(workerStatus))
+							logger.info(workerStatus = newWorkerStatus);
 					}
 					if(wait || !newBuild)
 						Thread.sleep(5000);

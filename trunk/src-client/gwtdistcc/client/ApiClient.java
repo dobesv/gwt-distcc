@@ -118,7 +118,10 @@ public class ApiClient {
 						new FilePart("data", payloadFile)
 				}, new HttpMethodParams());
 		PostMethod post = new PostMethod(url);
-		logger.info("Uploading build to "+post.getURI()+" from file "+payloadFile+" with build ID "+buildId+" and queues "+StringUtils.join(queues, ",")+" and "+perms+" permutations");
+		if(logger.isDebugEnabled())
+			logger.debug("Uploading build to "+post.getURI()+" from file "+payloadFile+" with build ID "+buildId+" and queues "+StringUtils.join(queues, ",")+" and "+perms+" permutations");
+		else
+			logger.info("Uploading build to "+server+" with build ID "+buildId+" and queues "+StringUtils.join(queues, ",")+" and "+perms+" permutations");
 		post.setRequestEntity(mp);
 		client.executeMethod(post);
 		post.releaseConnection();
@@ -127,9 +130,10 @@ public class ApiClient {
 		}
 		Header h = post.getResponseHeader("Location");
 		if(h != null) {
-			logger.info("Build status at "+h.getValue());
+			logger.info("Build uploaded; status URL is at "+h.getValue());
+		} else {
+			logger.warn("Upload complete.  No build status URL was returned by the server, however, which was not expected.");
 		}
-		logger.info("Build uploaded.");
 	}
 
 	public void addBuildResult(String server, String buildId, int perm, String uploadURL, String workerId, File payloadFile) throws HttpException, IOException, ApiException {
