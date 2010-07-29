@@ -201,7 +201,6 @@ public class Build {
 	}
 
 	public void delete(PersistenceManager pm, BlobstoreService blobstoreService) {
-		pm.deletePersistent(this);
 		if(getData() != null)
 			blobstoreService.delete(getData());
 		for(Permutation p : getPermutations()) {
@@ -209,5 +208,6 @@ public class Build {
 				blobstoreService.delete(p.getResultData());
 			}
 		}
+		pm.deletePersistent(this);
 	}
 }
