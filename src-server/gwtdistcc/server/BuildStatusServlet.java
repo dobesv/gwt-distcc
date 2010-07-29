@@ -24,13 +24,7 @@ public class BuildStatusServlet extends HttpServlet {
 		}
 		PersistenceManager pm = DB.getPersistenceManager();
 		try {
-			Build build;
-			try {
-				build = pm.getObjectById(Build.class, id);
-			} catch(JDOObjectNotFoundException notFound) {
-				resp.sendError(HttpServletResponse.SC_NOT_FOUND, "Build not found");
-				return;
-			}
+			Build build = pm.getObjectById(Build.class, id);
 			build.setLastStatusCheck(new Date());
 			
 			StringBuffer permsStarted=new StringBuffer();
