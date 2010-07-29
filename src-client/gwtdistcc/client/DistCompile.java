@@ -14,6 +14,7 @@ import org.apache.commons.httpclient.methods.GetMethod;
 import org.apache.commons.httpclient.methods.HeadMethod;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.IOUtils;
+import org.apache.commons.lang.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -117,12 +118,12 @@ public class DistCompile {
 				System.err.println("You must specify one or more queues to submit to by passing the -queue command line argument.");
 				System.exit(1);
 			}
+			logger.info("Compiling "+StringUtils.join(modules, " and ")+"; workDir is "+workDir+" server is "+server);
 			CompileUtils.launchToolAndWaitAndExitOnFailure(Precompile.class, compileArgs.toArray(new String[compileArgs.size()]));
 			TreeMap<String,TreeSet<String>> waitingForBuilds = new TreeMap<String, TreeSet<String>>();
 			TreeMap<String,String> moduleNameForBuild = new TreeMap<String, String>();
 			ApiClient apiClient = new ApiClient();
 			for(String moduleName : modules) {
-				logger.info("Compiling module "+moduleName+" workDir is "+workDir+" server is "+server);
 				File moduleDir = new File(workDir, moduleName);
 				File moduleCompileDir = new File(moduleDir, "compiler");
 				File permsCountFile = new File(moduleCompileDir, "permCount.txt");
