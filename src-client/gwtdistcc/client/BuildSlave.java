@@ -275,7 +275,7 @@ public class BuildSlave {
 							} else if(get.getStatusCode() == HttpStatus.SC_NOT_FOUND){
 								logger.debug("No builds on "+url);
 							} else {
-								logger.warn("Error reading "+url, get.getStatusLine());
+								logger.warn("Error reading "+url+": "+get.getStatusLine());
 							}
 						} finally {
 							get.releaseConnection();
