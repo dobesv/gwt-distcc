@@ -1,7 +1,11 @@
 package gwtdistcc.client;
 
 import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.FileReader;
+import java.io.IOException;
+import java.security.InvalidKeyException;
+import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
@@ -9,7 +13,10 @@ import java.util.Map;
 import java.util.TreeMap;
 import java.util.TreeSet;
 
+import javax.crypto.NoSuchPaddingException;
+
 import org.apache.commons.httpclient.Header;
+import org.apache.commons.httpclient.HttpException;
 import org.apache.commons.httpclient.HttpStatus;
 import org.apache.commons.httpclient.methods.GetMethod;
 import org.apache.commons.httpclient.methods.HeadMethod;
@@ -124,45 +131,9 @@ public class DistCompile {
 			TreeMap<String,String> moduleNameForBuild = new TreeMap<String, String>();
 			ApiClient apiClient = new ApiClient();
 			for(String moduleName : modules) {
-				File moduleDir = new File(workDir, moduleName);
-				File moduleCompileDir = new File(moduleDir, "compiler");
-				File permsCountFile = new File(moduleCompileDir, "permCount.txt");
-				int permCount = Integer.parseInt(IOUtils.toString(new FileReader(permsCountFile)).trim());
-				File astFile = new File(moduleCompileDir, Precompile.PRECOMPILE_FILENAME);
-				String buildId = CompileUtils.digestFile(cryptKey.getBytes(), astFile);
-				
-				File buildDir = new File(workDir, buildId);
-				if(!buildDir.mkdirs()) {
-					System.err.println("Failed to create folder "+buildDir);
-				}
-				File payloadFile = new File(buildDir, "payload");
-				CompileUtils.encryptPayload(moduleName, cryptKey, astFile, payloadFile);
-				File buildModuleDir = new File(buildDir, moduleName);
-				FileUtils.copyDirectoryToDirectory(moduleDir, buildModuleDir);
-				
-				try {
-					apiClient.addBuild(server, buildLabel, buildId, queues.toArray(new String[queues.size()]), permCount, payloadFile);
-				} catch(ApiException ae) {
-					if(ae.getStatusCode() == HttpStatus.SC_CONFLICT) {
-						logger.info("Build appears to have already been uploaded, previous build results might be re-used.");
-					} else {
-						logger.error("Error submitting build", ae);
-						System.exit(1);
-						return;
-					}
-				}
-	
-				// Now that its on the server, flag it that way in our local folder so other build slaves
-				// will see it and delete it at the appropriate time
-				File serverFile = new File(buildDir, "server");
-				FileUtils.writeStringToFile(serverFile, server);
-	
-				
-				TreeSet<String> waitingForPermutations = new TreeSet<String>();
-				for(int i=0; i < permCount; i++) {
-					waitingForPermutations.add(String.valueOf(i));
-				}
-				waitingForBuilds.put(buildId, waitingForPermutations);
+				String buildId = uploadBuild(server, moduleName, workDir,
+						queues, buildLabel, cryptKey, waitingForBuilds,
+						apiClient);
 				moduleNameForBuild.put(buildId, moduleName);
 			}
 			
@@ -175,42 +146,21 @@ public class DistCompile {
 					String buildId = buildEntry.getKey();
 					String moduleName = moduleNameForBuild.get(buildId);
 					TreeSet<String> waitingForPermutations = buildEntry.getValue();
-					String buildStatusURL = server+"/build-status?id="+buildId;
-					HeadMethod req = new HeadMethod(buildStatusURL);
-					apiClient.executeMethod(req);
+					HeadMethod req = apiClient.getBuildStatus(server, buildId);
 					
-					logger.debug("Waiting for build results to come back for "+moduleName+"... Perms "+StringUtils.join(waitingForPermutations, ",")+" still pending");
-					
-					for(String perm : waitingForPermutations) {
-						StringBuffer sb = new StringBuffer();
-						sb.append("Permutation ").append(perm);
-						sb.append(" of ").append(moduleName);
-						Header finishTimeHeader = req.getResponseHeader("X-Permutation-"+perm+"-Finished");
-						if(finishTimeHeader != null) {
-							sb.append(" completed at ").append(finishTimeHeader.getValue());
-						} else {
-							Header startTimeHeader = req.getResponseHeader("X-Permutation-"+perm+"-Started");
-							if(startTimeHeader != null) {
-								sb.append(" started at ").append(startTimeHeader.getValue());
-								Header activeHeader = req.getResponseHeader("X-Permutation-"+perm+"-Active");
-								if(activeHeader != null && !activeHeader.getValue().equals(startTimeHeader.getValue())) {
-									sb.append(" worker active at ").append(activeHeader.getValue());
-								}
-							}
-						}
-						Header workerHeader = req.getResponseHeader("X-Permutation-"+perm+"-Worker");
-						if(workerHeader != null) {
-							sb.append(" by ").append(workerHeader.getValue());
-						}
-						if(knownStatus.add(sb.toString())) {
-							logger.info(sb.toString());
-						}
-					}
+					logPermutationStatusIfChanged(req, knownStatus, moduleName, waitingForPermutations);
 					
 					if(req.getStatusCode() != HttpStatus.SC_OK) {
-						logger.error("Error checking build status: "+req.getStatusLine());
-						System.exit(1);
-						return;
+						if(req.getStatusCode() == HttpStatus.SC_NOT_FOUND) {
+							logger.error("Build not found on the server, perhaps we got dumped for taking too long? retrying...");
+							uploadBuild(server, moduleName, workDir, queues, buildLabel, cryptKey, waitingForBuilds, apiClient);
+						} else if(req.getStatusCode() == HttpStatus.SC_INTERNAL_SERVER_ERROR) {
+							logger.error("Server returns internal server error, not good.  Will keep trying anyway, just in case its a temporary issue.");
+						} else {
+							logger.error("Error checking build status: "+req.getStatusLine());
+							System.exit(1);
+							return;
+						}
 					}
 					String completedPermsString = req.getResponseHeader("X-Permutations-Finished").getValue();
 					String[] completedPermsStrArray = completedPermsString.split(",");
@@ -254,5 +204,83 @@ public class DistCompile {
 			e.printStackTrace();
 			System.exit(1);
 		}
+	}
+
+	private static void logPermutationStatusIfChanged(HeadMethod req,
+			TreeSet<String> knownStatus, String moduleName,
+			TreeSet<String> waitingForPermutations) {
+		for(String perm : waitingForPermutations) {
+			StringBuffer sb = new StringBuffer();
+			sb.append("Permutation ").append(perm);
+			sb.append(" of ").append(moduleName);
+			Header finishTimeHeader = req.getResponseHeader("X-Permutation-"+perm+"-Finished");
+			if(finishTimeHeader != null) {
+				sb.append(" completed at ").append(finishTimeHeader.getValue());
+			} else {
+				Header startTimeHeader = req.getResponseHeader("X-Permutation-"+perm+"-Started");
+				if(startTimeHeader != null) {
+					sb.append(" started at ").append(startTimeHeader.getValue());
+					Header activeHeader = req.getResponseHeader("X-Permutation-"+perm+"-Active");
+					if(activeHeader != null && !activeHeader.getValue().equals(startTimeHeader.getValue())) {
+						sb.append(" worker active at ").append(activeHeader.getValue());
+					}
+					Header workerHeader = req.getResponseHeader("X-Permutation-"+perm+"-Worker");
+					if(workerHeader != null) {
+						sb.append(" by ").append(workerHeader.getValue());
+					}
+				} else {
+					sb.append(" not started yet.");
+				}
+			}
+			if(knownStatus.add(sb.toString())) {
+				logger.info(sb.toString());
+			}
+		}
+	}
+
+	private static String uploadBuild(String server, String moduleName,
+			File workDir, TreeSet<String> queues, String buildLabel,
+			String cryptKey, TreeMap<String, TreeSet<String>> waitingForBuilds,
+			ApiClient apiClient) throws IOException, FileNotFoundException,
+			NoSuchAlgorithmException, NoSuchPaddingException,
+			InvalidKeyException, HttpException {
+		File moduleDir = new File(workDir, moduleName);
+		File moduleCompileDir = new File(moduleDir, "compiler");
+		File permsCountFile = new File(moduleCompileDir, "permCount.txt");
+		int permCount = Integer.parseInt(IOUtils.toString(new FileReader(permsCountFile)).trim());
+		File astFile = new File(moduleCompileDir, Precompile.PRECOMPILE_FILENAME);
+		String buildId = CompileUtils.digestFile(cryptKey.getBytes(), astFile);
+		
+		File buildDir = new File(workDir, buildId);
+		if(!buildDir.mkdirs()) {
+			System.err.println("Failed to create folder "+buildDir);
+		}
+		File payloadFile = new File(buildDir, "payload");
+		CompileUtils.encryptPayload(moduleName, cryptKey, astFile, payloadFile);
+		File buildModuleDir = new File(buildDir, moduleName);
+		FileUtils.copyDirectoryToDirectory(moduleDir, buildModuleDir);
+		
+		try {
+			apiClient.addBuild(server, buildLabel, buildId, queues.toArray(new String[queues.size()]), permCount, payloadFile);
+		} catch(ApiException ae) {
+			if(ae.getStatusCode() == HttpStatus.SC_CONFLICT) {
+				logger.info("Build appears to have already been uploaded, previous build results might be re-used.");
+			} else {
+				throw new Error("Error submitting build", ae);
+			}
+		}
+
+		// Now that its on the server, flag it that way in our local folder so other build slaves
+		// will see it and delete it at the appropriate time
+		File serverFile = new File(buildDir, "server");
+		FileUtils.writeStringToFile(serverFile, server);
+
+		
+		TreeSet<String> waitingForPermutations = new TreeSet<String>();
+		for(int i=0; i < permCount; i++) {
+			waitingForPermutations.add(String.valueOf(i));
+		}
+		waitingForBuilds.put(buildId, waitingForPermutations);
+		return buildId;
 	}
 }
