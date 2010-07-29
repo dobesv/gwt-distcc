@@ -232,9 +232,10 @@ public class BuildSlave {
 						try {
 							Header invalidCachedBuildsHeader = get.getResponseHeader("X-Delete-Cached-Builds");
 							if(invalidCachedBuildsHeader != null && !invalidCachedBuildsHeader.getValue().isEmpty()) {
-								for(String delBuild : invalidCachedBuildsHeader.getValue().split(",")) {
-									logger.info("Deleting expired/old build "+delBuild);
-									FileUtils.deleteDirectory(new File(workDir, delBuild));
+								for(String delBuildId : invalidCachedBuildsHeader.getValue().split(",")) {
+									File buildDir = new File(workDir, delBuildId);
+									logger.info("Deleting expired/old build "+buildDir);
+									FileUtils.deleteDirectory(buildDir);
 								}
 							}
 							if(get.getStatusCode() == HttpStatus.SC_OK || get.getStatusCode() == HttpStatus.SC_NOT_MODIFIED) {
@@ -274,7 +275,7 @@ public class BuildSlave {
 							} else if(get.getStatusCode() == HttpStatus.SC_NOT_FOUND){
 								logger.debug("No builds on "+url);
 							} else {
-								logger.warn("Error reading "+url);
+								logger.warn("Error reading "+url, get.getStatusLine());
 							}
 						} finally {
 							get.releaseConnection();

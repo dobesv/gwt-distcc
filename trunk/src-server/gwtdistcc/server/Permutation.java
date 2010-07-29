@@ -150,8 +150,17 @@ public class Permutation implements Comparable<Permutation> {
 		this.buildAlive = buildAlive;
 	}
 
+	/**
+	 * A permutation is available for building if:
+	 * 
+	 * <ul>
+	 * <li>If hasn't finished building</li>
+	 * <li>It has no worker building it OR we haven't heard from the worker who is supposed to be building it recently enough</li>
+	 * </ul>
+	 * @return
+	 */
 	public boolean isAvailable() {
-		return finished == null && (workerId == null || buildAlive == null || (System.currentTimeMillis() > buildAlive.getTime() + 300000));
+		return finished == null && (workerId == null || buildAlive == null || (System.currentTimeMillis() > (buildAlive.getTime() + 30000)));
 	}
 
 	@Override

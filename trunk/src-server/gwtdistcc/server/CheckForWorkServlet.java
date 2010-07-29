@@ -5,6 +5,7 @@ import java.io.PrintWriter;
 import java.util.Date;
 import java.util.Set;
 
+import javax.jdo.JDOObjectNotFoundException;
 import javax.jdo.PersistenceManager;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
@@ -97,7 +98,12 @@ public class CheckForWorkServlet extends HttpServlet {
 		StringBuffer sb = new StringBuffer();
 		for(String cachedBuildId : getCachedBuilds(req)) {
 			// Check the status of the build
-			Build b = pm.getObjectById(Build.class, cachedBuildId);
+			Build b;
+			try {
+				b = pm.getObjectById(Build.class, cachedBuildId);
+			} catch (JDOObjectNotFoundException e) {
+				b = null; // not found
+			}
 			if(b == null || b.getCompleted() != null) {
 				sb.append(", ");
 				sb.append(cachedBuildId);
