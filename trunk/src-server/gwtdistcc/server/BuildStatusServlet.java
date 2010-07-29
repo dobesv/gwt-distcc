@@ -2,6 +2,7 @@ package gwtdistcc.server;
 
 import java.io.IOException;
 import java.io.PrintWriter;
+import java.util.Date;
 
 import javax.jdo.JDOObjectNotFoundException;
 import javax.jdo.PersistenceManager;
@@ -23,11 +24,15 @@ public class BuildStatusServlet extends HttpServlet {
 		}
 		PersistenceManager pm = DB.getPersistenceManager();
 		try {
-			Build build = pm.getObjectById(Build.class, id);
-			if(build == null) {
+			Build build;
+			try {
+				build = pm.getObjectById(Build.class, id);
+			} catch(JDOObjectNotFoundException notFound) {
 				resp.sendError(HttpServletResponse.SC_NOT_FOUND, "Build not found");
 				return;
 			}
+			build.setLastStatusCheck(new Date());
+			
 			StringBuffer permsStarted=new StringBuffer();
 			StringBuffer permsComplete=new StringBuffer();
 			int startedCount=0;
