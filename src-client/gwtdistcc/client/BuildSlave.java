@@ -23,6 +23,7 @@ import org.apache.commons.httpclient.HttpStatus;
 import org.apache.commons.httpclient.methods.GetMethod;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.IOUtils;
+import org.apache.commons.lang.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -104,8 +105,34 @@ public class BuildSlave {
 			params.put("q", this.queues);
 			params.put("workerLabel", this.workerLabel);
 			params.put("workerId", BuildSlave.workerId);
+			TreeSet<String> cachedBuilds = getCachedBuilds();
+			if(!cachedBuilds.isEmpty()) {
+				params.put("cache", StringUtils.join(cachedBuilds,","));
+			}
+			
 			ApiClient.appendQueryString(url, params);
 			return url.toString();
+		}
+		private TreeSet<String> getCachedBuilds() {
+			TreeSet<String> cachedBuilds = new TreeSet<String>();
+			File[] buildDirs = BuildSlave.workDir.listFiles();
+			for(File dir : buildDirs) {
+				if(!dir.isDirectory())
+					continue;
+				File payload = new File(dir, "payload");
+				if(!payload.exists())
+					continue;
+				File serverFile = new File(dir, "server");
+				if(!serverFile.exists())
+					continue;
+				try {
+					String server = FileUtils.readFileToString(serverFile).trim();
+					if(server.equals(this.server))
+						cachedBuilds.add(dir.getName());
+				} catch (IOException e) {
+				}
+			}
+			return cachedBuilds;
 		}
 		static BuildSlave.QueueToWatch load(File f) throws IOException,
 				FileNotFoundException {
@@ -196,24 +223,6 @@ public class BuildSlave {
 				
 				for(QueueToWatch qtw : queuesToWatch) {
 					// Get a list of builds for which we have cached the AST file
-					TreeSet<String> cachedBuilds = new TreeSet<String>();
-					File[] buildDirs = workDir.listFiles();
-					for(File dir : buildDirs) {
-						if(!dir.isDirectory())
-							continue;
-						File payload = new File(dir, "payload");
-						if(!payload.exists())
-							continue;
-						File serverFile = new File(dir, "server");
-						if(!serverFile.exists())
-							continue;
-						try {
-							String server = FileUtils.readFileToString(serverFile).trim();
-							if(server.equals(qtw.server))
-								cachedBuilds.add(dir.getName());
-						} catch (IOException e) {
-						}
-					}
 					if(qtw.queues.isEmpty())
 						continue;
 					try {
@@ -228,7 +237,7 @@ public class BuildSlave {
 									FileUtils.deleteDirectory(new File(workDir, delBuild));
 								}
 							}
-							if(get.getStatusCode() == HttpStatus.SC_OK) {
+							if(get.getStatusCode() == HttpStatus.SC_OK || get.getStatusCode() == HttpStatus.SC_NOT_MODIFIED) {
 								// Got a build back ...
 								final String buildId = get.getResponseHeader("X-Build-ID").getValue();
 								final int perm = Integer.parseInt(get.getResponseHeader("X-Permutation").getValue());
@@ -239,18 +248,22 @@ public class BuildSlave {
 										File buildDir = new File(workDir, buildId);
 										buildDir.mkdirs();
 										File payloadFile = new File(buildDir, "payload");
-										FileOutputStream fos = new FileOutputStream(payloadFile);
-										InputStream payloadStream = get.getResponseBodyAsStream();
-										try {
-											IOUtils.copy(payloadStream, fos); // Write response to a file first
-										} finally {
-											fos.close();
-											payloadStream.close();
+										if(payloadFile.exists()) {
+											logger.info("Payload already downloaded at "+payloadFile+", skipping download.");
+										} else if(get.getStatusCode() == HttpStatus.SC_NOT_MODIFIED) {
+											logger.error("Server thought we have this build here already, but we don't.  No smart handling for this scenario is in place yet.");
+											continue;
+										} else {
+											FileOutputStream fos = new FileOutputStream(payloadFile);
+											InputStream payloadStream = get.getResponseBodyAsStream();
+											try {
+												IOUtils.copy(payloadStream, fos); // Write response to a file first
+											} finally {
+												fos.close();
+												payloadStream.close();
+											}
 										}
 										executor.execute(new Build(qtw.server, qtw.key, buildId, perm, uploadURL));
-										synchronized(buildsInProgress) {
-											System.out.println(executor.getActiveCount()+" workers running for "+buildsInProgress.size()+" builds in progress; max local workers is "+localWorkers+".");
-										}
 									} catch (IOException e) {
 										e.printStackTrace();
 										continue;
@@ -285,12 +298,15 @@ public class BuildSlave {
 				do {
 					synchronized(buildsInProgress) {
 						wait = (executor.getActiveCount() >= localWorkers || buildsInProgress.size()>=localWorkers);
-						for(BuildInProgress bip : buildsInProgress) {
-							try {
-								client.buildAlive(bip.server, bip.buildId, bip.perm, workerId);
-							} catch (Exception e) {
-								logger.error("Error sending build ping to server", e);
+						if(!buildsInProgress.isEmpty()) {
+							for(BuildInProgress bip : buildsInProgress) {
+								try {
+									client.buildAlive(bip.server, bip.buildId, bip.perm, workerId);
+								} catch (Exception e) {
+									logger.error("Error sending build ping to server", e);
+								}
 							}
+							logger.info(executor.getActiveCount()+" of "+localWorkers+" workers active for "+buildsInProgress.size()+" builds in progress");
 						}
 					}
 					if(wait || !newBuild)
@@ -302,7 +318,6 @@ public class BuildSlave {
 			}
 		}
 	}
-	
 	static class BuildInProgress {
 		String server;
 		String buildId;
@@ -360,33 +375,53 @@ public class BuildSlave {
 			buildsInProgress.remove(new BuildInProgress(server, buildId, perm));
 		}
 	}
-	public static void doBuild(String server, String buildId, int perm, String uploadURL, String cryptKey) {
-		try {
-			File buildDir = new File(workDir, buildId);
-			File payloadFile = new File(buildDir, "payload");
+	
+	static String decryptPayload(String buildId, String cryptKey) throws IOException {
+		File buildDir = new File(workDir, buildId);
+		File payloadFile = new File(buildDir, "payload");
+		
+		// Decrypt payload
+		FileInputStream fis = new FileInputStream(payloadFile);
+		int version = fis.read();
+		if(version != DistCompile.V1_BYTE) {									
+			throw new Error("Build file has unspported version number, or is corrupted.  Aborting!");
+		}
+		InputStream in = CompileUtils.maybeDecryptStream(cryptKey, fis);
+		
+		String moduleName = CompileUtils.readSmallString(in);
+		
+		File compileDir = getCompileDir(buildDir, moduleName);
+		if(!compileDir.exists() && !compileDir.mkdirs()) {
+			throw new Error("Unable to create compilation folder "+compileDir+"; is the module name valid?");
+		}
+		File astFile = new File(compileDir, Precompile.PRECOMPILE_FILENAME);
+		if(astFile.exists()) {
+			logger.info("Decrypted AST file already on disk, re-using existing file.");
+		} else {
+			File tempFile = File.createTempFile("payload", ".tmp", compileDir);
 			
-			// Decrypt payload
-			FileInputStream fis = new FileInputStream(payloadFile);
-			int version = fis.read();
-			if(version != DistCompile.V1_BYTE) {									
-				throw new Error("Build file has unspported version number, or is corrupted.  Aborting!");
-			}
-			InputStream in = CompileUtils.maybeDecryptStream(cryptKey, fis);
-			
-			String moduleName = CompileUtils.readSmallString(in);
-			
-			logger.info("Compiling "+moduleName+" in build ID "+buildId+" and permutation "+perm);
-			
-			File compileDir = getCompileDir(buildDir, moduleName);
-			compileDir.mkdirs();
-			File astFile = new File(compileDir, Precompile.PRECOMPILE_FILENAME);
-			FileOutputStream fos = new FileOutputStream(astFile);
+			FileOutputStream fos = new FileOutputStream(tempFile);
 			try {
 				IOUtils.copy(in, fos);
 			} finally {
 				in.close();
 				fos.close();
 			}
+			if(!tempFile.renameTo(astFile) && !astFile.exists()) {
+				throw new Error("Unable to rename temp decryption file "+tempFile+" to AST file "+astFile);
+			}
+		}
+		return moduleName;
+	}
+	public static void doBuild(String server, String buildId, int perm, String uploadURL, String cryptKey) {
+		try {
+			String moduleName = decryptPayload(buildId, cryptKey);
+			logger.info("Compiling "+moduleName+" in build ID "+buildId+" and permutation "+perm);
+			
+			File buildDir = new File(workDir, buildId);
+			
+			// Decrypt payload
+			File compileDir = getCompileDir(buildDir, moduleName);
 			
 			try {
 				File permutationFile = new File(compileDir, "permutation-"+perm+".js");
