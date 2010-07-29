@@ -121,6 +121,7 @@ public class BuildResultServlet extends HttpServlet {
 						resp.sendError(HttpServletResponse.SC_NOT_FOUND, "No build result was uploaded for this permutation");
 						return;
 					}
+					p.setDownloaded(new Date());
 					blobstoreService.serve(p.getResultData(), resp);
 					return;
 				}
