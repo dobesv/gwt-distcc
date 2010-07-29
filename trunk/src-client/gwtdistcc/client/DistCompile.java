@@ -175,7 +175,7 @@ public class DistCompile {
 					String buildStatusURL = server+"/build-status?id="+buildId;
 					HeadMethod req = new HeadMethod(buildStatusURL);
 					apiClient.executeMethod(req);
-					System.out.println("Waiting for build results to come back... "+buildStatusURL);
+					logger.info("Waiting for build results to come back... "+buildStatusURL+" -> "+req.getStatusLine());
 					if(req.getStatusCode() != HttpStatus.SC_OK) {
 						logger.error("Error checking build status: "+req.getStatusLine());
 						System.exit(1);
@@ -185,21 +185,24 @@ public class DistCompile {
 					String[] completedPermsStrArray = completedPermsString.split(",");
 					for(String perm : completedPermsStrArray) {
 						if(waitingForPermutations.remove(perm)) {
-							logger.info("Downloading permutation "+perm);
-							GetMethod dlreq = new GetMethod(server+"/build-result?id="+buildId+"&perm="+perm);
-							apiClient.executeMethod(dlreq);
-							if(dlreq.getStatusCode() != HttpStatus.SC_OK) {
-								logger.error("Error trying to download permutation "+perm+": "+dlreq.getStatusLine());
-								System.exit(1);
-								return;
-							}
 							String moduleName = moduleNameForBuild.get(buildId);
 							File moduleDir = new File(workDir, moduleName);
 							File moduleCompileDir = new File(moduleDir, "compiler");
 							moduleCompileDir.mkdirs();
 							File permFile = new File(moduleCompileDir, "permutation-"+perm+".js");
-							CompileUtils.decryptStreamToFile(cryptKey, dlreq.getResponseBodyAsStream(), permFile);
-							
+							if(permFile.exists()) {
+								logger.info("Compile result for permutation "+perm+" for module "+moduleName+" found on disk, not (re-)downloading.");
+							} else {
+								logger.info("Downloading permutation "+perm);
+								GetMethod dlreq = new GetMethod(server+"/build-result?id="+buildId+"&perm="+perm);
+								apiClient.executeMethod(dlreq);
+								if(dlreq.getStatusCode() != HttpStatus.SC_OK) {
+									logger.error("Error trying to download permutation "+perm+": "+dlreq.getStatusLine());
+									System.exit(1);
+									return;
+								}
+								CompileUtils.decryptStreamToFile(cryptKey, dlreq.getResponseBodyAsStream(), permFile);
+							}
 							if(waitingForPermutations.isEmpty()) {
 								waitingForBuilds.remove(buildId);
 							}
