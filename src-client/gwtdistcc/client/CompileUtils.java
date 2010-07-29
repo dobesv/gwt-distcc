@@ -245,10 +245,10 @@ public class CompileUtils {
 	}
 
 	static void encryptFile(String cryptKey, File plainTextFile,
-			File cipherTextFile) throws FileNotFoundException, Error,
-			IOException {
+			File cipherTextFile) throws FileNotFoundException, IOException {
 		InputStream in;
-		OutputStream out = new GZIPOutputStream(maybeEncryptStream(cryptKey, new FileOutputStream(cipherTextFile)));
+		File tempCipherTextFile = File.createTempFile("cipher", ".tmp", cipherTextFile.getParentFile());
+		OutputStream out = new GZIPOutputStream(maybeEncryptStream(cryptKey, new FileOutputStream(tempCipherTextFile)));
 		in = new FileInputStream(plainTextFile);
 		try {
 			IOUtils.copy(in, out);
@@ -256,17 +256,24 @@ public class CompileUtils {
 			in.close();
 			out.close();
 		}
+		if(!tempCipherTextFile.renameTo(cipherTextFile)) {
+			throw new IOException("Failed to rename temp encryption file "+cipherTextFile+" to "+cipherTextFile);
+		}
 	}
 
 	static Cipher cipher;
 
 	public static void writeStreamToFile(InputStream stream, File file)
 			throws FileNotFoundException, IOException {
-		FileOutputStream permOut = new FileOutputStream(file);
+		File tempFile = File.createTempFile("stream", ".tmp", file.getParentFile());
+		FileOutputStream permOut = new FileOutputStream(tempFile);
 		try {
 			IOUtils.copy(stream, permOut);
 		} finally {
 			permOut.close();
+		}
+		if(!tempFile.renameTo(file)) {
+			throw new IOException("Failed to rename temp file "+tempFile+" to "+file);
 		}
 	}
 
@@ -284,7 +291,8 @@ public class CompileUtils {
 			File astFile, File payloadFile) throws FileNotFoundException,
 			IOException, NoSuchAlgorithmException, NoSuchPaddingException,
 			InvalidKeyException {
-		FileOutputStream fo = new FileOutputStream(payloadFile);
+		File tempFile = File.createTempFile("stream", ".tmp", payloadFile.getParentFile());
+		FileOutputStream fo = new FileOutputStream(tempFile);
 		try {
 			fo.write(DistCompile.V1_BYTE);
 			byte[] moduleNameBytes = moduleName.getBytes();
@@ -307,6 +315,9 @@ public class CompileUtils {
 			}
 		} finally {
 			IOUtils.closeQuietly(fo); // May already be closed by the CipherOutputStream
+		}
+		if(!tempFile.renameTo(payloadFile)) {
+			throw new IOException("Failed to rename temp file "+tempFile+" to payload file "+payloadFile);
 		}
 	}
 
