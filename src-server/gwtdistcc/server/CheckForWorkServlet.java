@@ -39,11 +39,8 @@ public class CheckForWorkServlet extends HttpServlet {
 			boolean foundBuild = false;
 			for (String queueId : queues) {
 				for (Build b : Build.list(pm, queueId)) {
-					if(System.currentTimeMillis() - b.getCreated().getTime() > (12*3600000)) {
-						// Time limit on a build ...
-						pm.deletePersistent(b);
+					if(b.deleteIfStale(pm, blobstoreService))
 						continue;
-					}
 					if(b.getCompleted() != null) {
 						// Build complete, don't return it
 						continue;

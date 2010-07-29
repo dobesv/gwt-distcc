@@ -11,9 +11,12 @@ import javax.jdo.annotations.Persistent;
 import javax.jdo.annotations.PrimaryKey;
 
 import com.google.appengine.api.blobstore.BlobKey;
+import com.google.appengine.api.blobstore.BlobstoreService;
 
 @PersistenceCapable
 public class Build {
+	private static final int BUILD_EXPIRY_TIME = 60000;
+
 	@PrimaryKey
 	@Persistent
 	String id;
@@ -41,6 +44,9 @@ public class Build {
 	
 	@Persistent
 	Date downloaded;
+	
+	@Persistent
+	Date lastStatusCheck;
 
 	public Build(String id, String label, Collection<String> queueIds, int numPermutations, BlobKey blob) {
 		super();
@@ -153,5 +159,55 @@ public class Build {
 
 	public BlobKey getData() {
 		return data;
+	}
+
+	/**
+	 * Return the last time the build's status was checked.  If a build remains
+	 * idle for a while we'll delete it from the system, this means that all the
+	 * time stamps on the build are old.
+	 */
+	public Date getLastStatusCheck() {
+		return lastStatusCheck;
+	}
+
+	public void setLastStatusCheck(Date lastStatusCheck) {
+		this.lastStatusCheck = lastStatusCheck;
+	}
+	
+	/**
+	 * Return the maximum date for all the timestamps on this build
+	 * @return
+	 */
+	public Date getFreshness() {
+		Date result = created;
+		if(completed != null) result = completed;
+		if(downloaded != null) result = downloaded;
+		if(lastStatusCheck != null && lastStatusCheck.after(result)) result = lastStatusCheck;
+		for(Permutation perm : getPermutations()) {
+			Date permFreshness = perm.getFreshness();
+			if(permFreshness.after(result))
+				result = permFreshness;
+		}
+		return result;
+	}
+
+	public boolean deleteIfStale(PersistenceManager pm, BlobstoreService blobstoreService) {
+		boolean buildExpired = (System.currentTimeMillis() - getFreshness().getTime()) > BUILD_EXPIRY_TIME;
+		if(buildExpired) {
+			// Time limit on a build, it must be touched or viewed at least once a minute or we'll can it
+			delete(pm, blobstoreService);
+		}
+		return buildExpired;
+	}
+
+	public void delete(PersistenceManager pm, BlobstoreService blobstoreService) {
+		pm.deletePersistent(this);
+		if(getData() != null)
+			blobstoreService.delete(getData());
+		for(Permutation p : getPermutations()) {
+			if(p.getResultData() != null) {
+				blobstoreService.delete(p.getResultData());
+			}
+		}
 	}
 }

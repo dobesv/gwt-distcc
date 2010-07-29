@@ -183,6 +183,20 @@ public class Permutation implements Comparable<Permutation> {
 	public BlobKey getResultData() {
 		return resultData;
 	}
+
+	/*
+	 * Return the last time this permutation was touched.
+	 * 
+	 * Used to decide whether to evict a build from the database.
+	 */
+	public Date getFreshness() {
+		Date result = getBuild().getCreated();
+		if(started != null) result = started;
+		if(finished != null) result = finished;
+		if(downloaded != null) result = downloaded;
+		if(buildAlive != null && buildAlive.after(result)) result = buildAlive;
+		return result;
+	}
 	
 	
 }
