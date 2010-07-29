@@ -42,10 +42,17 @@ public class BuildStatusServlet extends HttpServlet {
 					if(permsComplete.length()>0) permsComplete.append(",");
 					permsComplete.append(p.getPermutation());
 					completeCount++;
+					resp.addDateHeader("X-Permutation-"+p.getPermutation()+"-Finished", p.getFinished().getTime());
 				} else if(p.getStarted() != null) {
 					if(permsStarted.length()>0) permsStarted.append(",");
 					permsStarted.append(p.getPermutation());
 					startedCount++;
+					resp.addDateHeader("X-Permutation-"+p.getPermutation()+"-Started", p.getFinished().getTime());
+				}
+				if(p.getWorkerId() != null) {
+					resp.addHeader("X-Permutation-"+p.getPermutation()+"-Worker-ID", p.getWorkerId());
+					resp.addHeader("X-Permutation-"+p.getPermutation()+"-Worker", p.getWorkerLabel());
+					resp.addDateHeader("X-Permutation-"+p.getPermutation()+"-Active", p.getBuildAlive().getTime());
 				}
 			}
 			
