@@ -41,7 +41,7 @@ public class BuildStatusServlet extends HttpServlet {
 					if(permsStarted.length()>0) permsStarted.append(",");
 					permsStarted.append(p.getPermutation());
 					startedCount++;
-					resp.addDateHeader("X-Permutation-"+p.getPermutation()+"-Started", p.getFinished().getTime());
+					resp.addDateHeader("X-Permutation-"+p.getPermutation()+"-Started", p.getStarted().getTime());
 				}
 				if(p.getWorkerId() != null) {
 					resp.addHeader("X-Permutation-"+p.getPermutation()+"-Worker-ID", p.getWorkerId());
