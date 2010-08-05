@@ -243,9 +243,24 @@ public class BuildSlave {
 							}
 							if(get.getStatusCode() == HttpStatus.SC_OK || get.getStatusCode() == HttpStatus.SC_NOT_MODIFIED) {
 								// Got a build back ...
-								final String buildId = get.getResponseHeader("X-Build-ID").getValue();
-								final int perm = Integer.parseInt(get.getResponseHeader("X-Permutation").getValue());
-								final String uploadURL = get.getResponseHeader("X-Upload-Result-To").getValue();
+								Header buildIdHeader = get.getResponseHeader("X-Build-ID");
+								if(buildIdHeader == null) {
+									logger.error("Server didn't return a build ID for the build!");
+									continue;
+								}
+								final String buildId = buildIdHeader.getValue();
+								Header permHeader = get.getResponseHeader("X-Permutation");
+								if(permHeader == null) {
+									logger.error("Server didn't return a permutation number for the build!");
+									continue;
+								}
+								final int perm = Integer.parseInt(permHeader.getValue());
+								Header uploadResultURLHeader = get.getResponseHeader("X-Upload-Result-To");
+								if(uploadResultURLHeader == null) {
+									logger.error("Server didn't return an upload URL for the build result!");
+									continue;
+								}
+								final String uploadURL = uploadResultURLHeader.getValue();
 								if(beginNewBuild(qtw.server, buildId, perm)) {
 									try {
 										newBuild=true;
