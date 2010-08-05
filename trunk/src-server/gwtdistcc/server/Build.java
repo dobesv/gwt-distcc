@@ -176,28 +176,15 @@ public class Build {
 		this.lastStatusCheck = lastStatusCheck;
 	}
 	
-	/**
-	 * Return the maximum date for all the timestamps on this build
-	 * @return
-	 */
-	public Date getFreshness() {
-		Date result = created;
-		if(completed != null) result = completed;
-		if(downloaded != null) result = downloaded;
-		if(lastStatusCheck != null && lastStatusCheck.after(result)) result = lastStatusCheck;
-		for(Permutation perm : getPermutations()) {
-			Date permFreshness = perm.getFreshness();
-			if(permFreshness.after(result))
-				result = permFreshness;
-		}
-		return result;
-	}
-
 	public boolean deleteIfStale(PersistenceManager pm, BlobstoreService blobstoreService) {
-		Date freshness = getFreshness();
-		boolean buildExpired = (System.currentTimeMillis() - freshness.getTime()) > BUILD_EXPIRY_TIME;
+		long lastTimeSomeoneCared;
+		if(downloaded != null) lastTimeSomeoneCared = downloaded.getTime();
+		else if(lastStatusCheck != null) lastTimeSomeoneCared = Math.max(lastStatusCheck.getTime(), created.getTime());
+		else lastTimeSomeoneCared = created.getTime();
+		
+		boolean buildExpired = (System.currentTimeMillis() - lastTimeSomeoneCared) > BUILD_EXPIRY_TIME;
 		if(buildExpired) {
-			log.info("Deleting stale build; not touched since "+freshness);
+			log.info("Deleting stale build; not checked on since "+new Date(lastTimeSomeoneCared));
 			// Time limit on a build, it must be touched or viewed at least once a minute or we'll can it
 			delete(pm, blobstoreService);
 		}

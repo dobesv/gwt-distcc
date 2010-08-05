@@ -137,6 +137,7 @@ public class BuildResultServlet extends HttpServlet {
 						return;
 					}
 					p.setDownloaded(new Date());
+					b.setDownloaded(new Date());
 					blobstoreService.serve(p.getResultData(), resp);
 					return;
 				}
