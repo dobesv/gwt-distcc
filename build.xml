@@ -20,7 +20,7 @@
 			</classpath>
 		</manifestclasspath>
 		<jar destfile="gwtdistcc-compile.jar" compress="false">
-        	<fileset dir="war/WEB-INF/classes"/>
+        	<fileset dir="build/classes"/>
 			<manifest>
 				<attribute name="Main-Class" value="gwtdistcc.client.DistCompile" />
 				<attribute name="Class-Path" value="${classpath.manifest.jars}" />
