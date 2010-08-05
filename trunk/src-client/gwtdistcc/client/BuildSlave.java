@@ -1,5 +1,7 @@
 package gwtdistcc.client;
 
+import gwtdistcc.client.CompileUtils.RunResult;
+
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
@@ -425,12 +427,27 @@ public class BuildSlave {
 			// Decrypt payload
 			File compileDir = getCompileDir(buildDir, moduleName);
 			
+			File cachedFailure = new File(buildDir, "failure.txt");
+			if(cachedFailure.exists()) {
+				String failure = FileUtils.readFileToString(cachedFailure);
+				logger.info("Rejecting build since we've already failed to build this one before.  Hopefully another worker will pick it up.");
+				client.addBuildFailure(server, buildId, perm, workerId, failure);
+				return;
+			}
+			
 			try {
 				File permutationFile = new File(compileDir, "permutation-"+perm+".js");
 				if(!permutationFile.exists()) {
-					int rc = CompileUtils.launchToolAndWait(CompilePerms.class, moduleName, "-workDir", buildDir.getAbsolutePath(), "-perms", String.valueOf(perm));
-					if(rc != 0) {
-						logger.warn("Build failed ... TODO report this back to the server");
+					RunResult buildResult = CompileUtils.launchTool(CompilePerms.class, moduleName, "-workDir", buildDir.getAbsolutePath(), "-perms", String.valueOf(perm));
+					if(buildResult.waitFor() != 0) {
+						String failure = "CompileDist returned non-zero exit status.";
+						if(buildResult.isOutOfMemoryError()) {
+							failure = "out of memory";
+						} else if(buildResult.isClassNotFound()) {
+							failure = "class not found";
+						}
+						FileUtils.writeStringToFile(cachedFailure, failure);
+						client.addBuildFailure(server, buildId, perm, workerId, failure);
 						return;
 					}
 				} else {
@@ -451,12 +468,20 @@ public class BuildSlave {
 				}
 				
 			} catch (InterruptedException e) {
+				client.addBuildFailure(server, buildId, perm, workerId, "interrupted");
 				logger.error("Interrupted, exiting ...");
 				System.exit(1);
 			}
 			
-		} catch (IOException e) {
-			e.printStackTrace();
+		} catch (Throwable t) {
+			try {
+				logger.error("Build failed", t);
+				client.addBuildFailure(server, buildId, perm, workerId, StringUtils.defaultString(t.getLocalizedMessage(), t.getClass().getName()));
+			} catch (HttpException e) {
+				logger.error("Failed to report build failure to server.", e);
+			} catch (IOException e) {
+				logger.error("Failed to report build failure to server.", e);
+			}
 			return;
 		} finally {
 			exitBuild(server, buildId, perm);

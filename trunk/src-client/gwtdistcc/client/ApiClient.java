@@ -174,6 +174,23 @@ public class ApiClient {
 		logger.debug("Notified build server we are still building at "+post.getURI());
 	}
 	
+	public void addBuildFailure(String server, String buildId, int perm, String workerId, String error) throws HttpException, IOException {
+		TreeMap<String,String> params = new TreeMap<String,String>();
+		params.put("id", buildId);
+		params.put("workerId", workerId);
+		params.put("perm", String.valueOf(perm));
+		params.put("error", error);
+		StringBuffer url=new StringBuffer(server).append("/build-result?");
+		appendQueryString(url, params);
+		PostMethod post = new PostMethod(url.toString());
+		executeMethod(post);
+		post.releaseConnection();
+		if(post.getStatusCode() != HttpStatus.SC_OK) {
+			logger.error("Got bad build failure report response: "+post.getStatusLine());
+		}
+		logger.info("Notified build server of build failure at "+post.getURI());
+	}
+	
 	public void executeMethod(HttpMethod method) throws HttpException, IOException {
 		client.executeMethod(method);
 	}
@@ -192,5 +209,6 @@ public class ApiClient {
 			server = server.substring(0, server.length()-1);
 		return server;
 	}
+
 
 }
