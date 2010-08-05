@@ -193,7 +193,7 @@ public class DistCompile {
 							}
 							if(waitingForPermutations.isEmpty()) {
 								waitingForBuilds.remove(buildId);
-								if(failedPermsStrArray.length > 0) {
+								if(failedPermsStrArray.length > 0 && !failedPermsStrArray[0].isEmpty()) {
 									logger.error("One or more permutations of "+moduleName+" failed to compile.  Not linking.");
 								} else {
 									logger.info("Got all permutations back for "+moduleName+"; linking....");
@@ -268,14 +268,10 @@ public class DistCompile {
 			StringBuffer sb = new StringBuffer();
 			sb.append("Permutation ").append(perm);
 			sb.append(" of ").append(moduleName);
-			Header finishTimeHeader = req.getResponseHeader("X-Permutation-"+perm+"-Finished");
-			Header errorTimeHeader = req.getResponseHeader("X-Permutation-"+perm+"-Error-Time");
-			if(errorTimeHeader != null) {
-				sb.append(" failed at ").append(errorTimeHeader.getValue());
-			}
-			if(finishTimeHeader != null) {
-				sb.append(" completed at ").append(finishTimeHeader.getValue());
-			} else {
+			Header workerHeader = req.getResponseHeader("X-Permutation-"+perm+"-Worker");
+			if(workerHeader != null) {
+				Header finishTimeHeader = req.getResponseHeader("X-Permutation-"+perm+"-Finished");
+				Header errorTimeHeader = req.getResponseHeader("X-Permutation-"+perm+"-Error-Time");
 				Header startTimeHeader = req.getResponseHeader("X-Permutation-"+perm+"-Started");
 				if(startTimeHeader != null) {
 					sb.append(" started at ").append(startTimeHeader.getValue());
@@ -283,13 +279,16 @@ public class DistCompile {
 //					if(activeHeader != null && !activeHeader.getValue().equals(startTimeHeader.getValue())) {
 //						sb.append(" worker active at ").append(activeHeader.getValue());
 //					}
-					Header workerHeader = req.getResponseHeader("X-Permutation-"+perm+"-Worker");
-					if(workerHeader != null) {
-						sb.append(" by ").append(workerHeader.getValue());
-					}
-				} else {
-					sb.append(" not started yet.");
 				}
+				if(errorTimeHeader != null) {
+					sb.append(" failed at ").append(errorTimeHeader.getValue());
+				}
+				if(finishTimeHeader != null) {
+					sb.append(" completed at ").append(finishTimeHeader.getValue());
+				}
+				sb.append(" by ").append(workerHeader.getValue());
+			} else {
+				sb.append(" not started yet.");
 			}
 			if(knownStatus.add(sb.toString())) {
 				logger.info(sb.toString());
