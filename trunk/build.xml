@@ -43,11 +43,9 @@
 				<fileset dir="lib">
 				    <include name="*.jar"/>
 				</fileset>
-				<fileset dir="${gwt.home}">
-				    <include name="*.jar"/>
-				</fileset>
 			</classpath>
 		</javac>
+		<!-- TODO: Do AppEngine build, too.  For now I rely on eclipse to do this. -->
 	</target>
 
 	<property name="test.gwtdistcc.server" value="gwtdistcc.appspot.com"/>
@@ -60,9 +58,6 @@
 			<path location="src-gwt-example"/>
 			<path location="gwtdistcc-compile.jar"/>
 			<fileset dir="lib">
-			    <include name="*.jar"/>
-			</fileset>
-			<fileset dir="${gwt.home}">
 			    <include name="*.jar"/>
 			</fileset>
 		</path>
