@@ -54,8 +54,8 @@ public class BuildResultServlet extends HttpServlet {
 			}
 			for(Permutation p : b.getPermutations()) {
 				if(p.getPermutation() == permutation) {
-					if(!p.getWorkerId().equals(workerId)) {
-						resp.sendError(HttpServletResponse.SC_NOT_FOUND, "You are not the current worker for that permutation.");
+					if(p.getWorkerId() != null && !p.getWorkerId().equals(workerId)) {
+						resp.sendError(HttpServletResponse.SC_NOT_FOUND, "You are not the current worker ("+p.getWorkerId()+") for that permutation.");
 						return;
 					}
 					p.setBuildAlive(new Date());
