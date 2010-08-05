@@ -50,6 +50,32 @@ public class CompileUtils {
 
 	static final Logger logger = LoggerFactory.getLogger(CompileUtils.class);
 
+	public static final class RunResult {
+		Process process;
+		Integer exitValue;
+		boolean outOfMemoryError;
+		boolean classNotFound;
+		
+		public int exitValue() {
+			if(exitValue == null) {
+				if(process != null) {
+					return exitValue = process.exitValue();
+				}
+				throw new IllegalStateException();
+			}
+			return exitValue;
+		}
+		public boolean isOutOfMemoryError() {
+			return outOfMemoryError;
+		}
+		public int waitFor() throws InterruptedException {
+			return process.waitFor();
+		}
+		public boolean isClassNotFound() {
+			return classNotFound;
+		}
+		
+	}
 	/**
 	 * Launches an external tool passing the given arguments, using the same
 	 * classpath and JVM args as the current JVM is using.
@@ -57,7 +83,7 @@ public class CompileUtils {
 	 * @return A handle to the new process, which can be used to wait for completion and check the result
 	 * @throws IOException If the launch fails 
 	 */
-	public static Process launchTool(Class<?> clazz, String ... argsArray)
+	public static RunResult launchTool(Class<?> clazz, String ... argsArray)
 			throws IOException {
 
 		String javaCommand = System.getProperty(JAVA_COMMAND_PROPERTY, System
@@ -98,7 +124,8 @@ public class CompileUtils {
 		
 		logger.info(StringUtils.join(args, " "));
 		
-		final Process proc = builder.start();
+		final RunResult res = new RunResult();
+		final Process proc = res.process = builder.start();
 		final BufferedReader bin = new BufferedReader(new InputStreamReader(proc.getInputStream()));
 		final BufferedReader berr = new BufferedReader(new InputStreamReader(proc.getErrorStream()));
 		final Logger procLogger = LoggerFactory.getLogger(clazz.getName());
@@ -112,6 +139,7 @@ public class CompileUtils {
 						if (line == null) {
 							break;
 						}
+						checkLineForSpecialError(res, line);
 						System.out.println(line);
 					} catch (EOFException e) {
 						// Ignore
@@ -130,6 +158,7 @@ public class CompileUtils {
 						if (line == null) {
 							break;
 						}
+						checkLineForSpecialError(res, line);
 						System.err.println(line);
 					} catch (EOFException e) {
 						// Ignore
@@ -151,7 +180,7 @@ public class CompileUtils {
 			}
 		}));
 
-		return proc;
+		return res;
 	}
 
 	public static int launchToolAndWait(Class<?> clazz, String ... argsArray)
@@ -332,5 +361,13 @@ public class CompileUtils {
 		in.read(moduleNameBytes);
 		String moduleName = new String(moduleNameBytes);
 		return moduleName;
+	}
+
+	private static void checkLineForSpecialError(final RunResult res, String line) {
+		if(line.contains("OutOfMemory")) {
+			res.outOfMemoryError = true;
+		} else if(line.contains("ClassNotFound")) {
+			res.classNotFound = true;
+		}
 	}
 }

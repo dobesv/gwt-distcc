@@ -173,6 +173,14 @@ public class DistCompile {
 							return;
 						}
 					}
+					String failedPermsString = req.getResponseHeader("X-Permutations-Failed").getValue();
+					String[] failedPermsStrArray = failedPermsString.split(",");
+					for(String perm : failedPermsStrArray) {
+						if(waitingForPermutations.remove(perm)) {
+							String error = req.getResponseHeader("X-Permutation-"+perm+"-Error").getValue();
+							logger.error("Build failed for for permutation "+perm+" for module "+moduleName+": "+error);
+						}						
+					}
 					String completedPermsString = req.getResponseHeader("X-Permutations-Finished").getValue();
 					String[] completedPermsStrArray = completedPermsString.split(",");
 					for(String perm : completedPermsStrArray) {
@@ -185,18 +193,22 @@ public class DistCompile {
 							}
 							if(waitingForPermutations.isEmpty()) {
 								waitingForBuilds.remove(buildId);
-								logger.info("Got all permutations back for "+moduleName+"; linking....");
-								
-								long linkStartTime = System.currentTimeMillis();
-								linkModule(linkerArgs, moduleName);
-								linkingTime += System.currentTimeMillis() - linkStartTime;
-								
-								if(waitingForBuilds.isEmpty()) {
-									logger.info("Build complete."
-											+ "\ntotal time: "+elapsed(overallStartTime, System.currentTimeMillis())
-											+ "\nprecompile: "+elapsed(precompileStartTime, precompileFinishTime)
-											+ "\nuploading:  "+elapsed(uploadStartTime, buildStartTime)
-											+ "\nbuilding:   "+elapsed(buildStartTime, System.currentTimeMillis()));
+								if(failedPermsStrArray.length > 0) {
+									logger.error("One or more permutations of "+moduleName+" failed to compile.  Not linking.");
+								} else {
+									logger.info("Got all permutations back for "+moduleName+"; linking....");
+									
+									long linkStartTime = System.currentTimeMillis();
+									linkModule(linkerArgs, moduleName);
+									linkingTime += System.currentTimeMillis() - linkStartTime;
+									
+									if(waitingForBuilds.isEmpty()) {
+										logger.info("Build complete."
+												+ "\ntotal time: "+elapsed(overallStartTime, System.currentTimeMillis())
+												+ "\nprecompile: "+elapsed(precompileStartTime, precompileFinishTime)
+												+ "\nuploading:  "+elapsed(uploadStartTime, uploadEndTime)
+												+ "\nbuilding:   "+elapsed(buildStartTime, System.currentTimeMillis()));
+									}
 								}
 							}
 						}
@@ -257,6 +269,10 @@ public class DistCompile {
 			sb.append("Permutation ").append(perm);
 			sb.append(" of ").append(moduleName);
 			Header finishTimeHeader = req.getResponseHeader("X-Permutation-"+perm+"-Finished");
+			Header errorTimeHeader = req.getResponseHeader("X-Permutation-"+perm+"-Error-Time");
+			if(errorTimeHeader != null) {
+				sb.append(" failed at ").append(errorTimeHeader.getValue());
+			}
 			if(finishTimeHeader != null) {
 				sb.append(" completed at ").append(finishTimeHeader.getValue());
 			} else {
