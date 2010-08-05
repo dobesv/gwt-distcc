@@ -5,6 +5,7 @@ import java.util.Collections;
 import java.util.Date;
 import java.util.Map;
 
+import javax.jdo.JDOObjectNotFoundException;
 import javax.jdo.PersistenceManager;
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServlet;
@@ -47,8 +48,10 @@ public class BuildResultServlet extends HttpServlet {
 		
 		PersistenceManager pm = DB.getPersistenceManager();
 		try {
-			Build b = pm.getObjectById(Build.class, buildId);
-			if(b == null) {
+			Build b;
+			try {
+				b = pm.getObjectById(Build.class, buildId);
+			} catch (JDOObjectNotFoundException e1) {
 				resp.sendError(HttpServletResponse.SC_NOT_FOUND, "No build with that ID found.");
 				return;
 			}
