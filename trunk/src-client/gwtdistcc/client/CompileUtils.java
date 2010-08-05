@@ -181,6 +181,8 @@ public class CompileUtils {
 				try {
 					proc.exitValue();
 				} catch (IllegalThreadStateException e) {
+					// Ignore, process already stopped
+				} finally {
 					proc.destroy();
 				}
 			}
