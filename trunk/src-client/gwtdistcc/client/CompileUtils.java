@@ -74,6 +74,12 @@ public class CompileUtils {
 		public boolean isClassNotFound() {
 			return classNotFound;
 		}
+		/**
+		 * Terminate the process, if it is still running
+		 */
+		public void terminateProcess() {
+			process.destroy();
+		}
 		
 	}
 	/**

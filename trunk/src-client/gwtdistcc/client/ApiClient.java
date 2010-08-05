@@ -158,7 +158,7 @@ public class ApiClient {
 	}
 	
 
-	public void buildAlive(String server, String buildId, int perm, String workerId) throws HttpException, IOException {
+	public int buildAlive(String server, String buildId, int perm, String workerId) throws HttpException, IOException {
 		TreeMap<String,String> params = new TreeMap<String,String>();
 		params.put("id", buildId);
 		params.put("workerId", workerId);
@@ -170,8 +170,10 @@ public class ApiClient {
 		post.releaseConnection();
 		if(post.getStatusCode() != HttpStatus.SC_OK) {
 			logger.error("Got bad ping response: "+post.getStatusLine());
+		} else {
+			logger.debug("Notified build server we are still building at "+post.getURI());
 		}
-		logger.debug("Notified build server we are still building at "+post.getURI());
+		return post.getStatusCode();
 	}
 	
 	public void addBuildFailure(String server, String buildId, int perm, String workerId, String error) throws HttpException, IOException {

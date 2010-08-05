@@ -10,6 +10,7 @@ import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.UnknownHostException;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.Properties;
 import java.util.TreeMap;
@@ -55,24 +56,20 @@ public class BuildSlave {
 	private static File workDir;
 
 	private static final class Build implements Runnable {
-		private final String server;
+		private final BuildInProgress bip;
 		private final String key;
-		private final String buildId;
-		private final int perm;
 		private final String uploadURL;
 
-		private Build(String server, String key, String buildId, int perm,
+		private Build(BuildInProgress bip, String key,
 				String uploadURL) {
-			this.server = server;
+			this.bip = bip;
 			this.key = key;
-			this.buildId = buildId;
-			this.perm = perm;
 			this.uploadURL = uploadURL;
 		}
 
 		@Override
 		public void run() {
-			doBuild(server, buildId, perm, uploadURL, key);
+			doBuild(bip, uploadURL, key);
 		}
 	}
 	static class QueueToWatch implements Comparable<QueueToWatch> {
@@ -261,7 +258,8 @@ public class BuildSlave {
 									continue;
 								}
 								final String uploadURL = uploadResultURLHeader.getValue();
-								if(beginNewBuild(qtw.server, buildId, perm)) {
+								BuildInProgress bip = new BuildInProgress(qtw.server, buildId, perm);
+								if(beginNewBuild(bip)) {
 									try {
 										newBuild=true;
 										File buildDir = new File(workDir, buildId);
@@ -282,7 +280,7 @@ public class BuildSlave {
 												payloadStream.close();
 											}
 										}
-										executor.execute(new Build(qtw.server, qtw.key, buildId, perm, uploadURL));
+										executor.execute(new Build(bip, qtw.key, uploadURL));
 									} catch (IOException e) {
 										e.printStackTrace();
 										continue;
@@ -317,9 +315,14 @@ public class BuildSlave {
 				do {
 					synchronized(buildsInProgress) {
 						wait = (executor.getActiveCount() >= localWorkers || buildsInProgress.size()>=localWorkers);
-						for(BuildInProgress bip : buildsInProgress) {
+						for(BuildInProgress bip : new ArrayList<BuildInProgress>(buildsInProgress)) {
 							try {
-								client.buildAlive(bip.server, bip.buildId, bip.perm, workerId);
+								int sc = client.buildAlive(bip.server, bip.buildId, bip.perm, workerId);
+								if(sc == HttpStatus.SC_NOT_FOUND && bip.thread != null) {
+									// Bad permutation,  abort!
+									bip.thread.interrupt();
+									buildsInProgress.remove(bip);
+								}
 							} catch (Exception e) {
 								logger.error("Error sending build ping to server", e);
 							}
@@ -341,6 +344,8 @@ public class BuildSlave {
 		String server;
 		String buildId;
 		int perm;
+		Thread thread;
+		
 		public BuildInProgress(String server, String buildId, int perm) {
 			super();
 			this.server = server;
@@ -384,14 +389,14 @@ public class BuildSlave {
 		
 	}
 	static final HashSet<BuildInProgress> buildsInProgress = new HashSet<BuildInProgress>();
-	static boolean beginNewBuild(String server, String buildId, int perm) {
+	static boolean beginNewBuild(BuildInProgress bip) {
 		synchronized (buildsInProgress) {
-			return buildsInProgress.add(new BuildInProgress(server, buildId, perm));
+			return buildsInProgress.add(bip);
 		}
 	}
-	static void exitBuild(String server, String buildId, int perm) {
+	static void exitBuild(BuildInProgress bip) {
 		synchronized (buildsInProgress) {
-			buildsInProgress.remove(new BuildInProgress(server, buildId, perm));
+			buildsInProgress.remove(bip);
 		}
 	}
 	
@@ -432,8 +437,13 @@ public class BuildSlave {
 		}
 		return moduleName;
 	}
-	public static void doBuild(String server, String buildId, int perm, String uploadURL, String cryptKey) {
+	public static void doBuild(BuildInProgress bip, String uploadURL, String cryptKey) {
+		String server = bip.server;
+		String buildId = bip.buildId;
+		int perm = bip.perm;
 		try {
+			bip.thread = Thread.currentThread();
+			
 			String moduleName = decryptPayload(buildId, cryptKey);
 			logger.info("Compiling "+moduleName+" in build ID "+buildId+" and permutation "+perm);
 			
@@ -454,16 +464,20 @@ public class BuildSlave {
 				File permutationFile = new File(compileDir, "permutation-"+perm+".js");
 				if(!permutationFile.exists()) {
 					RunResult buildResult = CompileUtils.launchTool(CompilePerms.class, moduleName, "-workDir", buildDir.getAbsolutePath(), "-perms", String.valueOf(perm));
-					if(buildResult.waitFor() != 0) {
-						String failure = "CompileDist returned non-zero exit status.";
-						if(buildResult.isOutOfMemoryError()) {
-							failure = "out of memory";
-						} else if(buildResult.isClassNotFound()) {
-							failure = "class not found";
+					try {
+						if(buildResult.waitFor() != 0) {
+							String failure = "CompileDist returned non-zero exit status.";
+							if(buildResult.isOutOfMemoryError()) {
+								failure = "out of memory";
+							} else if(buildResult.isClassNotFound()) {
+								failure = "class not found";
+							}
+							FileUtils.writeStringToFile(cachedFailure, failure);
+							client.addBuildFailure(server, buildId, perm, workerId, failure);
+							return;
 						}
-						FileUtils.writeStringToFile(cachedFailure, failure);
-						client.addBuildFailure(server, buildId, perm, workerId, failure);
-						return;
+					} finally {
+						buildResult.terminateProcess();
 					}
 				} else {
 					logger.info("Permutation "+permutationFile+" already exists, using cached artifact");
@@ -484,8 +498,7 @@ public class BuildSlave {
 				
 			} catch (InterruptedException e) {
 				client.addBuildFailure(server, buildId, perm, workerId, "interrupted");
-				logger.error("Interrupted, exiting ...");
-				System.exit(1);
+				logger.error("Interrupted build, exiting ...");
 			}
 			
 		} catch (Throwable t) {
@@ -499,7 +512,7 @@ public class BuildSlave {
 			}
 			return;
 		} finally {
-			exitBuild(server, buildId, perm);
+			exitBuild(bip);
 		}
 	}
 	private static File getCompileDir(File buildDir, String moduleName) {
