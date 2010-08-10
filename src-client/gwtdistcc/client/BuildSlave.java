@@ -157,7 +157,7 @@ public class BuildSlave {
 		workDir = new File("build").getAbsoluteFile();
 		workerId = UUID.randomUUID().toString();
 		boolean once=false;
-		int localWorkers=1;
+		int localWorkers=Runtime.getRuntime().availableProcessors(); // default to the number of processors on the system
 		for(int i=0; i < args.length; i++) {
 			if(args[i].startsWith("-")) {
 				if(args[i].equals("-workDir")) {
@@ -170,7 +170,13 @@ public class BuildSlave {
 				} else if(args[i].equals("-id")) {
 					workerId = args[i+1];
 				} else if(args[i].equals("-localWorkers")) {
-					localWorkers=Integer.parseInt(args[i+1]);
+					if("runtime.availableProcessors".equals(args[i+1])) {
+						localWorkers=Runtime.getRuntime().availableProcessors();
+					} else if(args[i+1].startsWith("runtime.availableProcessors-")) {
+						localWorkers=Math.max(1, Runtime.getRuntime().availableProcessors() - Integer.parseInt(args[i+1].substring("runtime.availableProcessors-".length())));
+					} else {
+						localWorkers=Integer.parseInt(args[i+1]);
+					}
 				}
 				i++; // skip following argument too
 			}
