@@ -204,15 +204,15 @@ public class CompileUtils {
 	}
 
 	public static Cipher getCipher() {
-		if(cipher == null) {
-			try {
-				cipher = Cipher.getInstance("AES/CBC/PKCS5Padding");
-			} catch (Exception e) {
-				throw new Error(e);
-			}
+		try {
+			return Cipher.getInstance("AES/CBC/PKCS5Padding");
+		} catch (NoSuchAlgorithmException e) {
+			throw new Error(e); // Should be there
+		} catch (NoSuchPaddingException e) {
+			throw new Error(e); // Should be there
 		}
-		return cipher;
 	}
+	
 	static InputStream maybeDecryptStream(String cryptKey,
 			InputStream is) throws IOException {
 		InputStream in;
