@@ -92,6 +92,7 @@ public class BuildResultServlet extends HttpServlet {
 						BlobKey blob = blobs.values().iterator().next();
 						p.setFinished(new Date());
 						p.setResultData(blob);
+						resp.sendRedirect("/build-status?id="+buildId);
 					}
 					return;
 				}
