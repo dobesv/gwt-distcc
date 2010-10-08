@@ -165,8 +165,10 @@ public class DistCompile {
 						if(req.getStatusCode() == HttpStatus.SC_NOT_FOUND) {
 							logger.error("Build not found on the server, perhaps we got dumped for taking too long? retrying...");
 							uploadBuild(server, moduleName, workDir, queues, buildLabel, cryptKey, waitingForBuilds, apiClient);
+							continue;
 						} else if(req.getStatusCode() == HttpStatus.SC_INTERNAL_SERVER_ERROR) {
 							logger.error("Server returns internal server error, not good.  Will keep trying anyway, just in case its a temporary issue.");
+							continue;
 						} else {
 							logger.error("Error checking build status: "+req.getStatusLine());
 							System.exit(1);
